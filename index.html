@@ -252,7 +252,8 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
     <p class="sub">Facturação &amp; Gestão Empresarial</p>
     <input type="text" id="lu" placeholder="Nome de utilizador" onkeydown="if(event.key==='Enter')login()">
     <input type="password" id="lp" placeholder="Senha" onkeydown="if(event.key==='Enter')login()">
-    <button class="lbtn" onclick="login()"><i class="fas fa-sign-in-alt"></i> Entrar</button>
+    <button class="lbtn" id="loginBtn" onclick="login()"><i class="fas fa-sign-in-alt"></i> Entrar</button>
+    <div id="loginMsg" style="margin-top:12px;font-size:12px;min-height:16px"></div>
     <div style="margin-top:16px;border-top:1px solid #f0f0f0;padding-top:13px">
       <button onclick="resetCreds()" style="background:none;border:none;color:#a0aec0;font-size:11px;cursor:pointer;font-family:inherit;transition:color .2s" onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#a0aec0'">
         <i class="fas fa-key"></i> Repor credenciais padrão
@@ -260,10 +261,15 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
     </div>
   </div>
 </div>
+<div id="appLoading" style="display:none;position:fixed;inset:0;background:rgba(245,247,250,.96);z-index:99999;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Poppins',sans-serif">
+  <i class="fas fa-spinner fa-spin" style="font-size:34px;color:#3498db"></i>
+  <div id="appLoadingMsg" style="color:#2c3e50;font-size:14px;font-weight:500">A carregar dados...</div>
+</div>
 <div id="app" style="display:none">
   <div class="hdr">
     <h1><i class="fas fa-file-invoice-dollar"></i> Sistema de Facturacao BSK</h1>
     <div class="ui"><span id="uname"></span><span id="ulvl" class="ulvl"></span>
+      <button class="obtn" onclick="refreshAllData()" title="Recarregar dados do Google Sheets"><i class="fas fa-sync-alt"></i> Actualizar</button>
       <button class="obtn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button></div>
   </div>
   <div class="mc">
@@ -313,7 +319,7 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
       </div>
       <div class="fg"><label>Endereco:</label><textarea id="cliAddr" rows="2"></textarea></div>
       <div style="margin-bottom:13px">
-        <button class="btn bi bsm" onclick="openModal('clientsModal')"><i class="fas fa-search"></i> Buscar</button>
+        <button class="btn bi bsm" onclick="openClientsModal()"><i class="fas fa-search"></i> Buscar</button>
         <button class="btn bi bsm" onclick="saveCliQ()"><i class="fas fa-user-plus"></i> Guardar Cliente</button>
       </div>
       <h3 style="margin:14px 0 10px;font-size:15px"><i class="fas fa-list"></i> Itens</h3>
@@ -529,10 +535,11 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
       <h2 style="font-size:17px"><i class="fab fa-google"></i> Google Sheets — Sincronizacao Automatica</h2>
       <div id="gsUrlStatus" style="margin-bottom:14px"></div>
       <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:7px;padding:13px;margin-bottom:14px;font-size:13px">
-        <b><i class="fas fa-bolt" style="color:#2e7d32"></i> Sincronizacao automatica activa:</b> cada vez que guardar um documento, produto, cliente, fundo ou utilizador, os dados sao enviados automaticamente para o Google Sheets em tempo real.
+        <b><i class="fas fa-bolt" style="color:#2e7d32"></i> Google Sheets como base de dados partilhada:</b> ao guardar um documento, produto, cliente, fundo ou utilizador, os dados sao enviados automaticamente para o Google Sheets. Ao iniciar sessao (e ao mudar de aba), o sistema le os dados directamente do Sheets — qualquer pessoa com o link ve os mesmos dados, em qualquer dispositivo.
       </div>
       <div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:7px;padding:13px;margin-bottom:14px;font-size:13px">
         <b><i class="fas fa-info-circle"></i> Configuracao:</b> Google Sheets &rarr; Extensoes &rarr; Apps Script &rarr; cole o script &rarr; execute <code>setupSheets()</code> &rarr; publique como Web App (Qualquer pessoa) &rarr; cole a URL abaixo.
+        <br><b><i class="fas fa-exclamation-triangle"></i> Se ja tinha uma planilha publicada antes:</b> a folha "Utilizadores" agora precisa de uma coluna extra chamada <code>Password</code> (logo a seguir a "Username"). Se a folha ja tem utilizadores cadastrados e nao quer apaga-los, execute a funcao <code>migrateUsersPassword()</code> no Apps Script (adiciona a coluna sem apagar dados). Caso contrario, execute <code>setupSheets()</code> normalmente.
         <details style="margin-top:9px"><summary style="cursor:pointer;font-weight:600;color:#856404">Ver script Apps Script completo</summary>
           <pre id="asPre" style="background:#1e1e1e;color:#d4d4d4;padding:11px;border-radius:6px;font-size:11px;overflow:auto;max-height:240px;margin-top:8px;white-space:pre-wrap"></pre>
           <button class="btn bsm" onclick="copyAS()" style="margin-top:6px"><i class="fas fa-copy"></i> Copiar Script</button>
@@ -621,6 +628,22 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
   <div style="margin-top:11px;text-align:right"><button class="btn bd bsm" onclick="closeModal('clientsModal')">Fechar</button></div>
 </div></div>
 <script>
+// ================================================================
+// CONFIGURACAO DA LIGACAO AO GOOGLE SHEETS
+// ================================================================
+// *** COLE A URL DA WEB APP AQUI (entre as aspas) ***
+// Assim funciona automaticamente em qualquer navegador/computador,
+// sem que cada pessoa tenha de configurar nada.
+var GS_URL = 'https://script.google.com/macros/s/AKfycbzQ9LHlakVYn97w2ip4FAG-3KD3UStPnIy_5L-gJS6d-m6jb15x4-SH3RUFEWdc8kJzXg/exec';
+var GS_AUTO = true; // sincronizacao automatica activa
+
+function getGU(){
+  // Prioridade: 1) constante no codigo, 2) localStorage, 3) campo da interface
+  if(GS_URL && GS_URL.trim()!=='') return GS_URL.trim();
+  var f=document.getElementById('gsUrl');
+  return localStorage.getItem('gsheetsUrl') || (f?f.value.trim():'') || '';
+}
+
 var DEFS=[
   {id:'master',username:'master',password:'master123',name:'Master User',level:0,createdAt:'2024-01-01T00:00:00.000Z'},
   {id:'admin',username:'admin',password:'admin123',name:'Administrador',level:1,createdAt:'2024-01-01T00:00:00.000Z'}
@@ -628,6 +651,8 @@ var DEFS=[
 var CU=null,cDoc=null,editId=null;
 function G(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function S(k,v){localStorage.setItem(k,JSON.stringify(v));}
+// Estes arrays comecam vazios/em cache; sao preenchidos a partir do
+// Google Sheets (fonte de dados partilhada) logo apos o login.
 var users=G('users')||DEFS.map(function(u){return Object.assign({},u);});
 var docs=G('documents')||[];
 var prods=G('products')||[];
@@ -639,7 +664,9 @@ var cfg=G('companySettings')||{};
 function resetCreds(){
   if(!confirm('Repor master/master123 e admin/admin123?'))return;
   users=DEFS.map(function(u){return Object.assign({},u);}).concat(users.filter(function(u){return u.id!=='master'&&u.id!=='admin';}));
-  S('users',users);alert('Pronto!\nmaster / master123\nadmin / admin123');
+  S('users',users);
+  if(getGU())['master','admin'].forEach(function(id){gsSyncUser(users.find(function(u){return u.id===id;}));});
+  alert('Pronto!\nmaster / master123\nadmin / admin123');
 }
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -648,14 +675,47 @@ document.addEventListener('DOMContentLoaded',function(){
   else{document.getElementById('loginContainer').style.display='flex';}
 });
 
-function login(){
+function setLoginMsg(msg,isErr){
+  var el=document.getElementById('loginMsg');if(!el)return;
+  el.style.color=isErr?'#e74c3c':'#718096';el.textContent=msg||'';
+}
+function setLoginBusy(busy){
+  var b=document.getElementById('loginBtn');if(!b)return;
+  b.disabled=busy;
+  b.innerHTML=busy?'<i class="fas fa-spinner fa-spin"></i> A entrar...':'<i class="fas fa-sign-in-alt"></i> Entrar';
+}
+
+async function login(){
   var u=document.getElementById('lu').value.trim(),p=document.getElementById('lp').value.trim();
   if(!u||!p){alert('Preencha todos os campos.');return;}
-  users=G('users')||DEFS.map(function(x){return Object.assign({},x);});
+  setLoginBusy(true);setLoginMsg('');
+  var url=getGU();
+  var remoteUsers=null,connErr=null;
+  if(url){
+    setLoginMsg('A ligar ao Google Sheets...');
+    try{ remoteUsers=await gsReadSheet('Utilizadores'); }
+    catch(ex){ connErr=ex.message; }
+  }
+  if(remoteUsers && remoteUsers.length){
+    users=remoteUsers.map(rowsToUserObj);
+  } else {
+    // Sem URL configurada, ou folha vazia/erro: usa cache local + defaults
+    users=G('users')||DEFS.map(function(x){return Object.assign({},x);});
+    if(!users.some(function(x){return x.username==='master';})) users=users.concat(DEFS.map(function(x){return Object.assign({},x);}));
+  }
+  S('users',users);
   var f=null;for(var i=0;i<users.length;i++){if(users[i].username===u&&users[i].password===p){f=users[i];break;}}
-  if(!f){alert('Credenciais invalidas.\nSe necessario use "Repor credenciais padrao".');return;}
-  CU=f;S('loggedInUser',f);initApp();
+  if(!f){
+    setLoginBusy(false);
+    if(connErr) setLoginMsg('Aviso: falha ao ligar ao Google Sheets ('+connErr+'). A usar dados locais.',true);
+    alert('Credenciais invalidas.\nSe necessario use "Repor credenciais padrao".');
+    return;
+  }
+  CU=f;S('loggedInUser',f);
+  setLoginBusy(false);setLoginMsg('');
+  await initApp();
 }
+
 function logout(){
   if(!confirm('Sair?'))return;
   aLog('login','Logout: '+CU.name);CU=null;localStorage.removeItem('loggedInUser');
@@ -663,7 +723,135 @@ function logout(){
   document.getElementById('loginContainer').style.display='flex';
   document.getElementById('lu').value='';document.getElementById('lp').value='';
 }
-function initApp(){
+
+// ── Conversores: linha bruta do Sheets (array) -> objecto JS ──
+// Seguem exactamente a mesma ordem de colunas usada em GS_ROWS (ver mais abaixo)
+function rowsToUserObj(r){
+  return{id:r[0],name:r[1],username:r[2],password:r[3]||'',
+    level:({Master:0,Administrador:1}[r[4]]!==undefined?{Master:0,Administrador:1}[r[4]]:2),
+    email:r[5]||'',phone:r[6]||'',active:r[7]!=='Nao',lastLogin:r[8]||'',createdAt:r[9]||new Date().toISOString()};
+}
+function rowsToClientObj(r){
+  return{id:r[0],name:r[1],nuit:r[2]||'',phone:r[3]||'',phone2:r[4]||'',email:r[5]||'',address:r[6]||'',city:r[7]||'',
+    country:r[8]||'Mocambique',type:r[9]||'',creditLimit:r[10]||'',paymentTerms:r[11]||'',notes:r[12]||'',
+    createdBy:r[15]||'',createdAt:r[16]||new Date().toISOString(),updatedAt:r[17]||r[16]||''};
+}
+function rowsToProductObj(r){
+  return{id:r[0],code:r[1]||'',name:r[2],price:parseFloat(r[3])||0,cost:parseFloat(r[4])||0,category:r[6]||'',
+    supplier:r[7]||'',stock:parseInt(r[8])||0,minStock:parseInt(r[9])||0,unit:r[10]||'Unidade',barcode:r[11]||'',
+    location:r[12]||'',description:r[13]||'',notes:r[14]||'',createdBy:r[15]||'',createdAt:r[16]||new Date().toISOString(),
+    updatedAt:r[17]||r[16]||''};
+}
+function rowsToFundObj(r){
+  return{id:r[0],amount:parseFloat(r[1])||0,type:r[2]==='Entrada'?'income':'expense',source:r[3]||'',date:r[4]||'',
+    description:r[5]||'',category:r[6]||'',paymentMethod:r[7]||'',reference:r[8]||'',documentId:r[9]||null,
+    createdBy:r[11]||'',createdAt:r[12]||new Date().toISOString()};
+}
+function rowsToDocObj(r){
+  var items=[];
+  if(r[28]){
+    items=String(r[28]).split(';').map(function(s){return s.trim();}).filter(Boolean).map(function(s){
+      var m=s.match(/^(.*)\((\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)MT\)$/);
+      if(m)return{description:m[1].trim(),quantity:parseFloat(m[2])||0,price:parseFloat(m[3])||0,discount:0,total:(parseFloat(m[2])||0)*(parseFloat(m[3])||0)};
+      return{description:s,quantity:1,price:0,discount:0,total:0};
+    });
+  }
+  return{
+    createdAt:r[0]||new Date().toISOString(),number:r[1]||'',type:r[2]||'',date:r[3]||'',
+    clientName:r[5]||'',clientNuit:r[6]||'',clientPhone:r[7]||'',clientEmail:r[8]||'',clientAddress:r[9]||'',
+    subtotal:parseFloat(r[10])||0,totalDiscount:parseFloat(r[11])||0,globalDiscount:parseFloat(r[12])||0,
+    iva:parseFloat(r[13])||0,total:parseFloat(r[14])||0,applyIva:r[15]==='Sim',ivaExemptReason:r[16]||'',
+    isCredit:r[17]==='Sim',
+    creditDetails:r[17]==='Sim'?{days:r[18]||'',dueDate:r[19]||'',notes:r[20]||''}:null,
+    receiptDetails:r[2]==='Recibo'?{paymentMethod:r[21]||'',receivedFrom:r[22]||'',paymentFor:r[23]||''}:null,
+    status:r[24]||'pending',notes:r[25]||'',createdByName:r[26]||'',updatedAt:r[27]||'',
+    items:items
+  };
+}
+
+// ── Leitura genérica de uma aba do Sheets ──
+async function gsReadSheet(sheetName){
+  var url=getGU();if(!url)throw new Error('URL nao configurada');
+  var res=await fetch(url+'?action=read&sheet='+encodeURIComponent(sheetName),{mode:'cors'});
+  var json=await res.json();
+  if(json.status!=='ok')throw new Error(json.message||'Erro desconhecido');
+  return (json.rows||[]).slice(1); // remove cabecalho
+}
+
+// ── Carregamento completo de todos os dados a partir do Sheets ──
+// Esta é a função central que torna o Sheets a fonte real e partilhada
+// de dados: corre logo apos o login e sempre que se pede para actualizar.
+async function gsLoadAll(showOverlay){
+  var url=getGU();
+  if(!url){
+    gsL('Sem URL configurada — a usar apenas dados locais deste navegador.');
+    return false;
+  }
+  if(showOverlay)showAppLoading('A carregar dados do Google Sheets...');
+  try{
+    var results=await Promise.all([
+      gsReadSheet('Documentos').catch(function(){return null;}),
+      gsReadSheet('Produtos').catch(function(){return null;}),
+      gsReadSheet('Clientes').catch(function(){return null;}),
+      gsReadSheet('Fundos').catch(function(){return null;}),
+      gsReadSheet('Utilizadores').catch(function(){return null;}),
+      gsReadSheet('Logs').catch(function(){return null;}),
+      gsReadSheet('Configuracoes').catch(function(){return null;})
+    ]);
+    var rDocs=results[0],rProds=results[1],rClis=results[2],rFunds=results[3],rUsers=results[4],rLogs=results[5],rCfg=results[6];
+    var any=false;
+    if(rDocs){docs=rDocs.map(rowsToDocObj);S('documents',docs);any=true;}
+    if(rProds){prods=rProds.map(rowsToProductObj);S('products',prods);any=true;}
+    if(rClis){clis=rClis.map(rowsToClientObj);S('clients',clis);any=true;}
+    if(rFunds){funds=rFunds.map(rowsToFundObj);S('funds',funds);any=true;}
+    if(rUsers && rUsers.length){
+      users=rUsers.map(rowsToUserObj);
+      S('users',users);any=true;
+    }
+    if(rLogs){logs=rLogs.map(function(r){return{id:r[0],type:r[1],message:r[2],user:r[3],createdAt:r[5]||''};});S('logs',logs);any=true;}
+    if(rCfg && rCfg.length){
+      var map={};rCfg.forEach(function(r){map[r[0]]=r[1];});
+      cfg={companyName:map['Nome Empresa']||cfg.companyName||'',companyNuit:map['NUIT']||cfg.companyNuit||'',
+        companyPhone:map['Telefone']||cfg.companyPhone||'',companyEmail:map['Email']||cfg.companyEmail||'',
+        companyAddress:map['Endereco']||cfg.companyAddress||'',companyLogo:cfg.companyLogo||null};
+      S('companySettings',cfg);any=true;
+    }
+    if(showOverlay)hideAppLoading();
+    if(any){gsL('Dados carregados do Google Sheets com sucesso.');return true;}
+    gsL('Nao foi possivel ler dados do Google Sheets — a usar cache local.');
+    return false;
+  }catch(ex){
+    if(showOverlay)hideAppLoading();
+    gsL('Erro ao carregar do Sheets: '+ex.message);
+    return false;
+  }
+}
+
+function showAppLoading(msg){
+  var el=document.getElementById('appLoading');if(!el)return;
+  document.getElementById('appLoadingMsg').textContent=msg||'A carregar...';
+  el.style.display='flex';
+}
+function hideAppLoading(){var el=document.getElementById('appLoading');if(el)el.style.display='none';}
+
+// ── Recarregar tudo manualmente (botao "Actualizar dados") e re-renderizar ──
+async function refreshAllData(){
+  var url=getGU();
+  if(!url){toast('Configure a URL do Google Sheets na aba "Google Sheets" primeiro.','warn');return;}
+  showAppLoading('A actualizar dados...');
+  var ok=await gsLoadAll(false);
+  hideAppLoading();
+  renderEverything();
+  if(ok)toast('<i class="fas fa-check-circle"></i> Dados actualizados a partir do Google Sheets!','ok');
+  else toast('<i class="fas fa-exclamation-triangle"></i> Nao foi possivel actualizar. A mostrar dados em cache.','warn');
+}
+function renderEverything(){
+  loadCfg();updDN();fillYF();renderProds();renderClis();renderFunds();loadLogs();fillFDS();loadDocs();
+  if(document.getElementById('users') && document.getElementById('users').classList.contains('active'))renderUsers();
+  updateDocsStats();
+}
+
+async function initApp(){
   document.getElementById('loginContainer').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('uname').textContent=CU.name;
@@ -675,16 +863,23 @@ function initApp(){
   document.getElementById('fundsTab').style.display=CU.level<=1?'':'none';
   var td=new Date().toISOString().split('T')[0];
   document.getElementById('docDate').value=td;document.getElementById('fDt').value=td;
-  loadCfg();updDN();fillYF();renderProds();renderClis();renderFunds();loadLogs();fillFDS();loadDocs();
+
+  // Carrega dados reais e partilhados a partir do Google Sheets antes de
+  // desenhar qualquer tabela — isto resolve clientes/produtos/documentos
+  // "vazios" mesmo quando ja existem dados gravados por outra pessoa.
+  showAppLoading('A carregar dados do Google Sheets...');
+  await gsLoadAll(false);
+  hideAppLoading();
+
+  renderEverything();
   document.getElementById('docDate').addEventListener('change',function(){updCot();updCred();});
   document.getElementById('rPer').addEventListener('change',togCR);
   document.getElementById('sLogo').onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){var i=document.getElementById('sLogoI');i.src=ev.target.result;i.style.display='block';};r.readAsDataURL(f);};
   ['docModal','productsModal','clientsModal'].forEach(function(id){document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});});
-  var gu=GS_URL&&GS_URL.trim()!==''?GS_URL.trim():(localStorage.getItem('gsheetsUrl')||'');
+  var gu=getGU();
   if(gu){
     document.getElementById('gsUrl').value=gu;
-    // Se tem URL configurada, testa automaticamente em background
-    setTimeout(gsPing, 1500);
+    setTimeout(gsPing, 800);
   }
   document.getElementById('asPre').textContent=gsScr();
   resetFrmBtns();document.getElementById('itemsBody').innerHTML='';addRow();
@@ -697,6 +892,11 @@ function openTab(n){
   var ct=document.getElementById(n);if(ct)ct.classList.add('active');
   if(n==='users')renderUsers();if(n==='logs')loadLogs();
   if(n==='gsheets')showGsUrlStatus();
+  // Abas com dados partilhados: recarrega silenciosamente do Sheets em
+  // segundo plano para reflectir o que outras pessoas tenham gravado.
+  if(['documents','products','clients','funds','reports'].indexOf(n)>=0 && getGU()){
+    gsLoadAll(false).then(function(){renderEverything();});
+  }
 }
 function resetFrmBtns(){
   document.getElementById('frmBtns').innerHTML='<button class="btn bs" onclick="genDoc()"><i class="fas fa-file-alt"></i> Gerar</button><button class="btn" onclick="saveDoc()"><i class="fas fa-save"></i> Guardar</button><button class="btn bw" onclick="clearF()"><i class="fas fa-trash"></i> Limpar</button><button class="btn bd" onclick="expPDF()"><i class="fas fa-file-pdf"></i> PDF</button><button class="btn bi" onclick="genCopies()"><i class="fas fa-copy"></i> Copias</button><button class="btn bw" id="genRB" style="display:none" onclick="mkRcvCur()"><i class="fas fa-receipt"></i> Gerar Recibo</button>';
@@ -1119,10 +1319,16 @@ function acCli(inp){
 function fillC(c){document.getElementById('cliName').value=c.name;document.getElementById('cliNuit').value=c.nuit||'';document.getElementById('cliPhone').value=c.phone||'';document.getElementById('cliEmail').value=c.email||'';document.getElementById('cliAddr').value=c.address||'';}
 function openModal(id){document.getElementById(id).style.display='flex';}
 function closeModal(id){document.getElementById(id).style.display='none';}
-function openProductsModal(){document.getElementById('mpS').value='';fMP();openModal('productsModal');}
+function openProductsModal(){
+  document.getElementById('mpS').value='';fMP();openModal('productsModal');
+  if(getGU())gsReadSheet('Produtos').then(function(rows){prods=rows.map(rowsToProductObj);S('products',prods);fMP();}).catch(function(){});
+}
 function fMP(){var t=(document.getElementById('mpS').value||'').toLowerCase(),tb=document.getElementById('mpB');tb.innerHTML='';var l=t?prods.filter(function(p){return p.name.toLowerCase().includes(t)||(p.code&&p.code.toLowerCase().includes(t));}):prods;l.forEach(function(p){var tr=document.createElement('tr');tr.innerHTML='<td>'+(p.code||'-')+'</td><td>'+p.name+'</td><td>'+fmt(p.price)+'</td><td>'+(p.stock||0)+'</td><td><button class="btn bsm" onclick="addPF(\''+p.id+'\')"><i class="fas fa-plus"></i></button></td>';tb.appendChild(tr);});}
 function addPF(id){var p=prods.find(function(x){return x.id===id;});if(!p)return;if((p.stock||0)<=0&&CU.level>1){alert('Sem stock.');return;}var tr=document.createElement('tr');tr.innerHTML='<td><div class="acp"><input type="text" class="id" value="'+esc(p.name)+'" oninput="acP(this)"><div class="acl"></div></div></td><td><input type="number" class="iq" value="1" min="1" oninput="cR(this)"></td><td><input type="number" class="ip" value="'+p.price+'" min="0" step="0.01" oninput="cR(this)"></td><td><input type="text" class="idc" value="0" oninput="cR(this)"></td><td class="it2">'+fmt(p.price)+'</td><td><button class="btn bd bsm" onclick="remR(this)"><i class="fas fa-times"></i></button></td>';document.getElementById('itemsBody').appendChild(tr);calcT();closeModal('productsModal');}
-function openClientsModal(){document.getElementById('mcS').value='';fMC();openModal('clientsModal');}
+function openClientsModal(){
+  document.getElementById('mcS').value='';fMC();openModal('clientsModal');
+  if(getGU())gsReadSheet('Clientes').then(function(rows){clis=rows.map(rowsToClientObj);S('clients',clis);fMC();}).catch(function(){});
+}
 function fMC(){var t=(document.getElementById('mcS').value||'').toLowerCase(),tb=document.getElementById('mcB');tb.innerHTML='';var l=t?clis.filter(function(c){return c.name.toLowerCase().includes(t)||(c.nuit&&c.nuit.includes(t));}):clis;l.forEach(function(c){var tr=document.createElement('tr');tr.innerHTML='<td>'+c.name+'</td><td>'+(c.nuit||'-')+'</td><td>'+(c.phone||'-')+'</td><td>'+(c.email||'-')+'</td><td><button class="btn bsm" onclick="selC(\''+c.id+'\')"><i class="fas fa-check"></i></button></td>';tb.appendChild(tr);});}
 function selC(id){var c=clis.find(function(x){return x.id===id;});if(c){fillC(c);closeModal('clientsModal');}}
 function fillYF(){var s=document.getElementById('fDY');if(!s)return;var ys=[...new Set(docs.map(function(d){return(d.date||'').split('-')[0];}).filter(Boolean))];var cy=new Date().getFullYear().toString();if(!ys.includes(cy))ys.push(cy);ys.sort().reverse();var ov=s.value;s.innerHTML='<option value="">Todos os Anos</option>';ys.forEach(function(y){s.innerHTML+='<option value="'+y+'">'+y+'</option>';});s.value=ov;}
@@ -1142,8 +1348,6 @@ function nw(v){
   if(rt>0)res+=a(rt);
   res+=' meticais';if(dc>0)res+=' e '+(dc===1?'um centavo':a(dc)+' centavos');return res.trim();
 }
-function gsScr(){return'function doPost(e){\n  try{\n    var data=JSON.parse(e.postData.contents);\n    var ss=SpreadsheetApp.getActiveSpreadsheet();\n    var sheet=ss.getSheetByName(data.sheet)||ss.insertSheet(data.sheet);\n    if(data.action==="write"){\n      sheet.clearContents();\n      if(data.rows&&data.rows.length>0){\n        sheet.getRange(1,1,data.rows.length,data.rows[0].length).setValues(data.rows);\n        sheet.getRange(1,1,1,data.rows[0].length).setFontWeight("bold").setBackground("#1a73e8").setFontColor("#ffffff");\n      }\n      return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);\n    }\n    if(data.action==="read"){\n      return ContentService.createTextOutput(JSON.stringify({status:"ok",rows:sheet.getDataRange().getValues()})).setMimeType(ContentService.MimeType.JSON);\n    }\n  }catch(err){\n    return ContentService.createTextOutput(JSON.stringify({status:"error",message:err.toString()})).setMimeType(ContentService.MimeType.JSON);\n  }\n}\nfunction doGet(e){\n  var ss=SpreadsheetApp.getActiveSpreadsheet();\n  var s=e.parameter.sheet||"Documentos";\n  var sheet=ss.getSheetByName(s);\n  if(!sheet)return ContentService.createTextOutput(JSON.stringify({status:"error",message:"Sheet not found"})).setMimeType(ContentService.MimeType.JSON);\n  return ContentService.createTextOutput(JSON.stringify({status:"ok",rows:sheet.getDataRange().getValues()})).setMimeType(ContentService.MimeType.JSON);\n}';}
-function copyAS(){navigator.clipboard.writeText(gsScr()).then(function(){gsSS('Script copiado!','ok');}).catch(function(){gsSS('Copie manualmente.','w');});}
 // ── TOAST NOTIFICATION SYSTEM ──
 function toast(msg, type){
   type = type||'ok';
@@ -1183,12 +1387,6 @@ window.alert=function(msg){
   } else { _origAlert(msg); }
 };
 // ================================================================
-var GS_AUTO = true; // sincronizacao automatica activa
-
-// *** COLE A URL DA WEB APP AQUI (entre as aspas) ***
-// Assim funciona em qualquer navegador ou computador sem configuracao adicional
-var GS_URL = 'https://script.google.com/macros/s/AKfycbzQ9LHlakVYn97w2ip4FAG-3KD3UStPnIy_5L-gJS6d-m6jb15x4-SH3RUFEWdc8kJzXg/exec'; // ex: 'https://script.google.com/macros/s/SEU_ID/exec'
-
 function saveGsUrl(){
   var u=document.getElementById('gsUrl').value.trim();
   if(!u){alert('Insira a URL da Web App.');return;}
@@ -1198,12 +1396,7 @@ function saveGsUrl(){
   msg+='<small style="color:#555;margin-top:4px;display:block"><b>Dica:</b> Para funcionar em qualquer browser/PC, edite o ficheiro HTML e cole a URL na variavel <code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">GS_URL</code> no topo do script.</small>';
   gsSS(msg,'ok');
   gsL('URL guardada. A testar conexao...');
-  gsPing();
-}
-function getGU(){
-  // Prioridade: 1) constante no codigo, 2) localStorage, 3) campo da interface
-  if(GS_URL && GS_URL.trim()!=='') return GS_URL.trim();
-  return localStorage.getItem('gsheetsUrl') || document.getElementById('gsUrl').value.trim() || '';
+  gsPing().then(function(){ refreshAllData(); });
 }
 
 function showGsUrlStatus(){
@@ -1319,7 +1512,7 @@ var GS_ROWS = {
   },
   user: function(u){
     return[
-      u.id||'', u.name||'', u.username||'',
+      u.id||'', u.name||'', u.username||'', u.password||'',
       u.level===0?'Master':u.level===1?'Administrador':'Utilizador Normal',
       u.email||'', u.phone||'',
       u.active===false?'Nao':'Sim', u.lastLogin||'',
@@ -1346,7 +1539,8 @@ var GS_ROWS = {
 
 // ---- Funcao central de envio automatico ----
 async function gsAutoSync(action, sheetName, id, rowData){
-  var url=getGU(); if(!url) return; // silencioso se nao configurado
+  var url=getGU();
+  if(!url){ toast('<i class="fas fa-exclamation-triangle"></i> Google Sheets nao configurado — dados ficam apenas neste navegador.','warn'); return; }
   gsShowSyncing(true);
   try{
     var body={action:action, sheet:sheetName, id:id, row:rowData};
@@ -1360,6 +1554,7 @@ async function gsAutoSync(action, sheetName, id, rowData){
   }catch(ex){
     gsShowSyncing(false);
     gsL('AUTO-SYNC ERRO: '+ex.message);
+    toast('<i class="fas fa-times-circle"></i> Falha ao sincronizar com o Google Sheets. Verifique a ligacao.','err');
   }
 }
 
@@ -1417,14 +1612,22 @@ async function gsExp(t){
 async function gsImp(t){
   var url=getGU();if(!url){gsSS('Configure a URL primeiro.','w');return;}
   var shMap={documents:'Documentos',products:'Produtos',clients:'Clientes',funds:'Fundos',users:'Utilizadores'};
+  var convMap={documents:rowsToDocObj,products:rowsToProductObj,clients:rowsToClientObj,funds:rowsToFundObj,users:rowsToUserObj};
+  var stateMap={documents:'documents',products:'products',clients:'clients',funds:'funds',users:'users'};
   var sh=shMap[t];if(!sh){gsSS('Tipo invalido.','e');return;}
-  if(!confirm('Importar "'+sh+'" do Google Sheets?\nDados existentes com o mesmo ID serao actualizados.'))return;
+  if(!confirm('Importar "'+sh+'" do Google Sheets?\nOs dados mostrados no ecra serao substituidos pelos dados do Sheets.'))return;
   gsSS('<i class="fas fa-spinner fa-spin"></i> Importando "'+sh+'"...','w');
   try{
-    var res=await fetch(url+'?action=read&sheet='+encodeURIComponent(sh),{mode:'cors'});
-    var json=await res.json();
-    if(json.status!=='ok')throw new Error(json.message||'Erro desconhecido');
-    var rows=(json.rows||[]).slice(1);
+    var rows=await gsReadSheet(sh);
+    var conv=convMap[t],objs=rows.map(conv);
+    // Aplica de facto ao estado da aplicacao e ao cache local
+    if(t==='documents'){docs=objs;}
+    else if(t==='products'){prods=objs;}
+    else if(t==='clients'){clis=objs;}
+    else if(t==='funds'){funds=objs;}
+    else if(t==='users'){users=objs;}
+    S(stateMap[t],t==='users'?users:objs);
+    renderEverything();
     gsSS('<i class="fas fa-check-circle" style="color:#28a745"></i> '+rows.length+' registos importados de "'+sh+'"!','ok');
     gsL('IMPORT OK: '+rows.length+' linhas de '+sh+'.');
     document.getElementById('gsp-'+t).innerHTML='<span style="color:#155724;font-size:11px"><i class="fas fa-check"></i> '+rows.length+' importados</span>';
@@ -1473,7 +1676,7 @@ return `// BSK Apps Script v3 — cole este codigo completo no Google Apps Scrip
 // Execute setupSheets() UMA VEZ, depois publique como Web App (Qualquer pessoa)
 
 var ABAS={documents:'Documentos',products:'Produtos',clients:'Clientes',funds:'Fundos',users:'Utilizadores',suppliers:'Fornecedores',settings:'Configuracoes',logs:'Logs'};
-var HDRS={'Documentos':['ID','Numero','Tipo','Data','Data Criacao','Nome Cliente','NUIT Cliente','Telefone','Email','Endereco','Subtotal(MT)','Desc.Itens(MT)','Desc.Global(MT)','IVA(MT)','Total(MT)','IVA Aplicado','Motivo Isencao','Credito','Dias Credito','Data Vencimento','Notas Credito','Forma Pagamento','Recebi De','Ref Pagamento','Status','Notas','Criado Por','Ultima Actualizacao','Itens Detalhados'],'Produtos':['ID','Codigo','Nome','Preco Venda(MT)','Preco Compra(MT)','Margem(%)','Categoria','Fornecedor','Stock','Stock Min','Unidade','Cod Barras','Localizacao','Descricao','Notas','Criado Por','Data Criacao','Data Actualizacao'],'Clientes':['ID','Nome/Empresa','NUIT','Telefone','Telefone 2','Email','Endereco','Cidade','Pais','Tipo','Limite Credito(MT)','Cond.Pagamento','Notas','Total Compras(MT)','Num Documentos','Criado Por','Data Criacao','Data Actualizacao'],'Fundos':['ID','Valor(MT)','Tipo','Fonte/Origem','Data','Descricao','Categoria','Metodo Pagamento','Referencia','Doc Associado','Num Documento','Criado Por','Data Criacao'],'Utilizadores':['ID','Nome Completo','Username','Nivel Acesso','Email','Telefone','Activo','Ultimo Login','Data Criacao'],'Fornecedores':['ID','Nome/Empresa','NUIT','Telefone','Email','Endereco','Cidade','Pais','Contacto','Website','Cond.Pagamento','Prazo Entrega(dias)','Notas','Activo','Criado Por','Data Criacao','Data Actualizacao'],'Configuracoes':['Chave','Valor','Descricao','Data Actualizacao'],'Logs':['ID','Tipo','Mensagem','Utilizador','Sessao','Data/Hora']};
+var HDRS={'Documentos':['ID','Numero','Tipo','Data','Data Criacao','Nome Cliente','NUIT Cliente','Telefone','Email','Endereco','Subtotal(MT)','Desc.Itens(MT)','Desc.Global(MT)','IVA(MT)','Total(MT)','IVA Aplicado','Motivo Isencao','Credito','Dias Credito','Data Vencimento','Notas Credito','Forma Pagamento','Recebi De','Ref Pagamento','Status','Notas','Criado Por','Ultima Actualizacao','Itens Detalhados'],'Produtos':['ID','Codigo','Nome','Preco Venda(MT)','Preco Compra(MT)','Margem(%)','Categoria','Fornecedor','Stock','Stock Min','Unidade','Cod Barras','Localizacao','Descricao','Notas','Criado Por','Data Criacao','Data Actualizacao'],'Clientes':['ID','Nome/Empresa','NUIT','Telefone','Telefone 2','Email','Endereco','Cidade','Pais','Tipo','Limite Credito(MT)','Cond.Pagamento','Notas','Total Compras(MT)','Num Documentos','Criado Por','Data Criacao','Data Actualizacao'],'Fundos':['ID','Valor(MT)','Tipo','Fonte/Origem','Data','Descricao','Categoria','Metodo Pagamento','Referencia','Doc Associado','Num Documento','Criado Por','Data Criacao'],'Utilizadores':['ID','Nome Completo','Username','Password','Nivel Acesso','Email','Telefone','Activo','Ultimo Login','Data Criacao'],'Fornecedores':['ID','Nome/Empresa','NUIT','Telefone','Email','Endereco','Cidade','Pais','Contacto','Website','Cond.Pagamento','Prazo Entrega(dias)','Notas','Activo','Criado Por','Data Criacao','Data Actualizacao'],'Configuracoes':['Chave','Valor','Descricao','Data Actualizacao'],'Logs':['ID','Tipo','Mensagem','Utilizador','Sessao','Data/Hora']};
 var CORES={'Documentos':'#1a73e8','Produtos':'#0f9d58','Clientes':'#f4b400','Fundos':'#db4437','Utilizadores':'#673ab7','Fornecedores':'#00796b','Configuracoes':'#546e7a','Logs':'#78909c'};
 
 function doPost(e){
@@ -1539,6 +1742,22 @@ function setupSheets(){
   def.forEach(function(dn){var s=ss.getSheetByName(dn);if(s&&ss.getSheets().length>1){try{ss.deleteSheet(s);}catch(e){}}});
   SpreadsheetApp.flush();
   SpreadsheetApp.getUi().alert('BSK Setup Completo!','8 abas criadas:\\nDocumentos, Produtos, Clientes, Fundos, Utilizadores, Fornecedores, Configuracoes, Logs\\n\\nAgora: Implementar → App da Web (Qualquer pessoa)',SpreadsheetApp.getUi().ButtonSet.OK);
+}
+// Execute esta funcao UMA VEZ se ja tinha uma planilha "Utilizadores" antiga
+// (sem coluna Password) e nao quer apagar os utilizadores ja cadastrados.
+// Insere a coluna Password vazia na 4a posicao, preservando todos os dados.
+function migrateUsersPassword(){
+  var ss=SpreadsheetApp.getActiveSpreadsheet(),sh=ss.getSheetByName('Utilizadores');
+  if(!sh){SpreadsheetApp.getUi().alert('Folha "Utilizadores" nao encontrada.');return;}
+  var lr=sh.getLastRow();
+  if(lr<1){SpreadsheetApp.getUi().alert('Folha "Utilizadores" vazia. Execute setupSheets() em vez disto.');return;}
+  var firstHdr=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  if(firstHdr.indexOf('Password')>=0){SpreadsheetApp.getUi().alert('Esta folha ja tem a coluna Password. Nada a fazer.');return;}
+  sh.insertColumnAfter(3); // a seguir a coluna C (Username)
+  sh.getRange(1,4).setValue('Password');
+  if(lr>=2)sh.getRange(2,4,lr-1,1).setValue('alterar123'); // password temporaria para todos os utilizadores existentes
+  apFmt(sh,'Utilizadores',lr,sh.getLastColumn());
+  SpreadsheetApp.getUi().alert('Migracao completa!','Coluna Password adicionada.\\nUtilizadores existentes ficaram com a password temporaria "alterar123" — peça a cada um para a alterar assim que possivel (editando directamente a celula na coluna D).',SpreadsheetApp.getUi().ButtonSet.OK);
 }
 function testPing(){Logger.log(doGet({parameter:{action:'ping'}}).getContent());}
 function testRead(){Logger.log(doGet({parameter:{action:'read',sheet:'Documentos'}}).getContent());}
