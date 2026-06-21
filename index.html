@@ -63,6 +63,14 @@ body{font-family:'Poppins',sans-serif;margin:0;background:var(--light);color:#2d
     cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;gap:5px;
     padding:6px 12px;border-radius:20px;transition:var(--transition);}
 .obtn:hover{background:rgba(255,255,255,.2)}
+.gsi{background:none;border:none;cursor:pointer;font-size:11px;padding:4px;display:flex;align-items:center;
+    border-radius:50%;transition:var(--transition);width:24px;height:24px;justify-content:center}
+.gsi:hover{background:rgba(255,255,255,.15)}
+.gsi-ok i{color:#2ecc71}
+.gsi-err i{color:#e74c3c}
+.gsi-unknown i{color:#95a5a6}
+@keyframes gsiPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.gsi-checking i{color:#f39c12;animation:gsiPulse 1s infinite}
 #uname{font-weight:500;color:rgba(255,255,255,.9)}
 
 /* ── TABS ── */
@@ -117,6 +125,10 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
 .dt th{padding:10px 12px;text-align:left;font-weight:600;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
 .dt td{border-bottom:1px solid var(--border);padding:9px 12px;color:#4a5568;vertical-align:middle}
 .dt tbody tr:hover td{background:#f0f7ff}
+.dt-pick tbody tr{cursor:pointer}
+.dt-pick tbody tr:hover td{background:#e3f2fd}
+.dt-pick tbody tr.row-disabled{cursor:not-allowed;opacity:.55}
+.dt-pick tbody tr.row-disabled:hover td{background:transparent}
 .dt tbody tr:last-child td{border-bottom:none}
 .it{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}
 .it th,.it td{border:1px solid var(--border);padding:7px 9px}
@@ -210,8 +222,9 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
 #toastContainer{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{background:#2d3748;color:#fff;padding:11px 16px;border-radius:var(--radius);
     font-size:13px;font-family:'Poppins',sans-serif;
-    display:flex;align-items:center;gap:8px;min-width:220px;max-width:320px;
-    box-shadow:var(--shadow-lg);animation:toastIn .3s ease;border-left:4px solid var(--pr)}
+    display:flex;align-items:flex-start;gap:8px;min-width:220px;max-width:360px;
+    box-shadow:var(--shadow-lg);animation:toastIn .3s ease;border-left:4px solid var(--pr);line-height:1.5}
+.toast i{margin-top:2px}
 .toast.t-ok{border-left-color:var(--ok)}.toast.t-err{border-left-color:var(--err)}
 .toast.t-warn{border-left-color:var(--warn)}
 @keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
@@ -268,7 +281,11 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
 <div id="app" style="display:none">
   <div class="hdr">
     <h1><i class="fas fa-file-invoice-dollar"></i> Sistema de Facturacao BSK</h1>
-    <div class="ui"><span id="uname"></span><span id="ulvl" class="ulvl"></span>
+    <div class="ui">
+      <button id="gsIndicator" class="gsi gsi-unknown" onclick="openModal('gsDiagModal');showGsUrlStatus();" title="Estado da ligacao ao Google Sheets — clique para detalhes">
+        <i class="fas fa-circle"></i>
+      </button>
+      <span id="uname"></span><span id="ulvl" class="ulvl"></span>
       <button class="obtn" onclick="refreshAllData()" title="Recarregar dados do Google Sheets"><i class="fas fa-sync-alt"></i> Actualizar</button>
       <button class="obtn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button></div>
   </div>
@@ -284,7 +301,6 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
       <div class="tab" id="usersTab" onclick="openTab('users')"><i class="fas fa-user-shield"></i> Usuários</div>
       <div class="tab" id="backupTab" onclick="openTab('backup')"><i class="fas fa-database"></i> Backup</div>
       <div class="tab" id="logsTab" onclick="openTab('logs')"><i class="fas fa-history"></i> Logs</div>
-      <div class="tab" id="gsTab" onclick="openTab('gsheets')"><i class="fab fa-google"></i> Sheets</div>
     </div>
     <div class="tab-body">
     <!-- TAB: CRIAR -->
@@ -530,69 +546,34 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
       <div id="logsList"></div>
     </div>
 
-    <!-- TAB: GOOGLE SHEETS -->
-    <div id="gsheets" class="tc">
-      <h2 style="font-size:17px"><i class="fab fa-google"></i> Google Sheets — Sincronizacao Automatica</h2>
-      <div id="gsUrlStatus" style="margin-bottom:14px"></div>
-      <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:7px;padding:13px;margin-bottom:14px;font-size:13px">
-        <b><i class="fas fa-bolt" style="color:#2e7d32"></i> Google Sheets como base de dados partilhada:</b> ao guardar um documento, produto, cliente, fundo ou utilizador, os dados sao enviados automaticamente para o Google Sheets. Ao iniciar sessao (e ao mudar de aba), o sistema le os dados directamente do Sheets — qualquer pessoa com o link ve os mesmos dados, em qualquer dispositivo.
-      </div>
-      <div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:7px;padding:13px;margin-bottom:14px;font-size:13px">
-        <b><i class="fas fa-info-circle"></i> Configuracao:</b> Google Sheets &rarr; Extensoes &rarr; Apps Script &rarr; cole o script &rarr; execute <code>setupSheets()</code> &rarr; publique como Web App (Qualquer pessoa) &rarr; cole a URL abaixo.
-        <br><b><i class="fas fa-exclamation-triangle"></i> Se ja tinha uma planilha publicada antes:</b> a folha "Utilizadores" agora precisa de uma coluna extra chamada <code>Password</code> (logo a seguir a "Username"). Se a folha ja tem utilizadores cadastrados e nao quer apaga-los, execute a funcao <code>migrateUsersPassword()</code> no Apps Script (adiciona a coluna sem apagar dados). Caso contrario, execute <code>setupSheets()</code> normalmente.
-        <details style="margin-top:9px"><summary style="cursor:pointer;font-weight:600;color:#856404">Ver script Apps Script completo</summary>
-          <pre id="asPre" style="background:#1e1e1e;color:#d4d4d4;padding:11px;border-radius:6px;font-size:11px;overflow:auto;max-height:240px;margin-top:8px;white-space:pre-wrap"></pre>
-          <button class="btn bsm" onclick="copyAS()" style="margin-top:6px"><i class="fas fa-copy"></i> Copiar Script</button>
-        </details>
-      </div>
-      <div class="fr" style="align-items:flex-end">
-        <div class="fg" style="flex:3"><label>URL da Web App (Apps Script):</label><input type="url" id="gsUrl" placeholder="https://script.google.com/macros/s/..."></div>
-        <div class="fg" style="flex:1;display:flex;gap:6px;margin-top:20px">
-          <button class="btn bs" onclick="saveGsUrl()" style="flex:1"><i class="fas fa-save"></i> Guardar</button>
-          <button class="btn bi" onclick="gsPing()" style="flex:1"><i class="fas fa-plug"></i> Testar</button>
-        </div>
-      </div>
-      <div id="gsSt" style="margin-bottom:11px"></div>
-      <div style="margin-bottom:14px">
-        <button class="btn bs" onclick="gsSyncAll()" style="font-size:13px;padding:9px 18px"><i class="fas fa-sync-alt"></i> Sincronizar Tudo Agora</button>
-        <span style="font-size:11px;color:#777;margin-left:8px">Envia todos os dados (docs, produtos, clientes, fundos, utilizadores, logs, config) de uma so vez</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:11px">
-        <div class="gsc"><h4 style="border-color:#1a73e8"><i class="fas fa-file-alt" style="color:#1a73e8"></i> Documentos</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('documents')"><i class="fas fa-upload"></i> Exportar</button>
-            <button class="btn bi bsm" onclick="gsImp('documents')"><i class="fas fa-download"></i> Importar</button>
-          </div><div id="gsp-documents" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-        <div class="gsc"><h4 style="border-color:#0f9d58"><i class="fas fa-boxes" style="color:#0f9d58"></i> Produtos</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('products')"><i class="fas fa-upload"></i> Exportar</button>
-            <button class="btn bi bsm" onclick="gsImp('products')"><i class="fas fa-download"></i> Importar</button>
-          </div><div id="gsp-products" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-        <div class="gsc"><h4 style="border-color:#f4b400"><i class="fas fa-users" style="color:#f4b400"></i> Clientes</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('clients')"><i class="fas fa-upload"></i> Exportar</button>
-            <button class="btn bi bsm" onclick="gsImp('clients')"><i class="fas fa-download"></i> Importar</button>
-          </div><div id="gsp-clients" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-        <div class="gsc"><h4 style="border-color:#db4437"><i class="fas fa-money-bill-wave" style="color:#db4437"></i> Fundos</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('funds')"><i class="fas fa-upload"></i> Exportar</button>
-            <button class="btn bi bsm" onclick="gsImp('funds')"><i class="fas fa-download"></i> Importar</button>
-          </div><div id="gsp-funds" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-        <div class="gsc"><h4 style="border-color:#673ab7"><i class="fas fa-user-shield" style="color:#673ab7"></i> Utilizadores</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('users')"><i class="fas fa-upload"></i> Exportar</button>
-          </div><div id="gsp-users" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-        <div class="gsc"><h4 style="border-color:#78909c"><i class="fas fa-history" style="color:#78909c"></i> Logs</h4>
-          <div style="display:flex;gap:5px;margin-top:7px">
-            <button class="btn bs bsm" onclick="gsExp('logs')"><i class="fas fa-upload"></i> Exportar</button>
-          </div><div id="gsp-logs" style="margin-top:6px;font-size:11px;color:#777">Aguarda sincronizacao</div></div>
-      </div>
-      <h4 style="margin-top:17px;font-size:13px"><i class="fas fa-terminal"></i> Log de Operacoes</h4>
-      <div id="gsLog" style="background:#1e1e1e;color:#98c379;padding:10px;border-radius:6px;max-height:180px;overflow-y:auto;font-size:11px;font-family:monospace;line-height:1.6">Pronto. Configure a URL e clique Testar.</div>
-    </div>
   </div><!-- /tab-body -->
   </div><!-- /mc -->
 </div><!-- /app -->
+
+<!-- Painel de diagnostico da ligacao ao Google Sheets — escondido por defeito,
+     aberto ao clicar no indicador de estado no cabecalho. Substitui a antiga
+     aba "Sheets": a ligacao agora e automatica (URL embutida no codigo),
+     este painel serve so para verificar o estado e, em caso raro de duvida,
+     consultar o script Apps Script de referencia. -->
+<div id="gsDiagModal" class="modal"><div class="mc2" style="max-width:560px">
+  <div class="mh"><h3><i class="fab fa-google"></i> Ligacao ao Google Sheets</h3><button class="cb" onclick="closeModal('gsDiagModal')">&times;</button></div>
+  <div id="gsUrlStatus" style="margin-bottom:12px"></div>
+  <div style="margin-bottom:11px">
+    <button class="btn bi bsm" onclick="gsPing()"><i class="fas fa-plug"></i> Testar Ligacao</button>
+    <button class="btn bs bsm" onclick="refreshAllData()"><i class="fas fa-sync-alt"></i> Recarregar Dados</button>
+  </div>
+  <div id="gsSt" style="margin-bottom:11px"></div>
+  <details style="font-size:12px">
+    <summary style="cursor:pointer;font-weight:600;color:#718096">Detalhes tecnicos / Apps Script de referencia</summary>
+    <div style="margin-top:9px;background:#fff3cd;border:1px solid #ffeeba;border-radius:7px;padding:11px;font-size:12px">
+      Se precisar de reconfigurar a folha de calculo (ex: planilha nova), copie o script abaixo, cole em Google Sheets &rarr; Extensoes &rarr; Apps Script, execute <code>setupSheets()</code>, publique como Web App (Qualquer pessoa) e actualize a variavel <code>GS_URL</code> no ficheiro HTML.
+    </div>
+    <pre id="asPre" style="background:#1e1e1e;color:#d4d4d4;padding:11px;border-radius:6px;font-size:11px;overflow:auto;max-height:200px;margin-top:8px;white-space:pre-wrap"></pre>
+    <button class="btn bsm" onclick="copyAS()" style="margin-top:6px"><i class="fas fa-copy"></i> Copiar Script</button>
+    <h4 style="margin-top:13px;font-size:12px"><i class="fas fa-terminal"></i> Log de Operacoes</h4>
+    <div id="gsLog" style="background:#1e1e1e;color:#98c379;padding:10px;border-radius:6px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace;line-height:1.6">Pronto.</div>
+  </details>
+</div></div>
 
 <div id="toastContainer"></div>
 <div id="gsSyncBadge"></div>
@@ -614,7 +595,7 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
   <div class="mh"><h3>Produtos</h3><button class="cb" onclick="closeModal('productsModal')">&times;</button></div>
   <input type="text" id="mpS" placeholder="Pesquisar..." style="margin-bottom:10px" oninput="fMP()">
   <div style="max-height:380px;overflow-y:auto">
-    <table class="dt"><thead><tr><th>Codigo</th><th>Nome</th><th>Preco</th><th>Stock</th><th></th></tr></thead><tbody id="mpB"></tbody></table>
+    <table class="dt dt-pick"><thead><tr><th>Codigo</th><th>Nome</th><th>Preco</th><th>Stock</th><th></th></tr></thead><tbody id="mpB"></tbody></table>
   </div>
   <div style="margin-top:11px;text-align:right"><button class="btn bd bsm" onclick="closeModal('productsModal')">Fechar</button></div>
 </div></div>
@@ -623,7 +604,7 @@ input[readonly]{background:#f8fafc;color:#718096;cursor:default}
   <div class="mh"><h3>Clientes</h3><button class="cb" onclick="closeModal('clientsModal')">&times;</button></div>
   <input type="text" id="mcS" placeholder="Pesquisar..." style="margin-bottom:10px" oninput="fMC()">
   <div style="max-height:380px;overflow-y:auto">
-    <table class="dt"><thead><tr><th>Nome</th><th>NUIT</th><th>Tel</th><th>Email</th><th></th></tr></thead><tbody id="mcB"></tbody></table>
+    <table class="dt dt-pick"><thead><tr><th>Nome</th><th>NUIT</th><th>Tel</th><th>Email</th><th></th></tr></thead><tbody id="mcB"></tbody></table>
   </div>
   <div style="margin-top:11px;text-align:right"><button class="btn bd bsm" onclick="closeModal('clientsModal')">Fechar</button></div>
 </div></div>
@@ -638,10 +619,10 @@ var GS_URL = 'https://script.google.com/macros/s/AKfycbzQ9LHlakVYn97w2ip4FAG-3KD
 var GS_AUTO = true; // sincronizacao automatica activa
 
 function getGU(){
-  // Prioridade: 1) constante no codigo, 2) localStorage, 3) campo da interface
+  // A URL fica sempre embutida directamente no codigo (constante GS_URL).
+  // Mantém fallback de localStorage só por compatibilidade com sessoes antigas.
   if(GS_URL && GS_URL.trim()!=='') return GS_URL.trim();
-  var f=document.getElementById('gsUrl');
-  return localStorage.getItem('gsheetsUrl') || (f?f.value.trim():'') || '';
+  return localStorage.getItem('gsheetsUrl') || '';
 }
 
 var DEFS=[
@@ -859,7 +840,7 @@ async function initApp(){
   if(CU.level===0){el.textContent='Master';el.className='ulvl lvm';}
   else if(CU.level===1){el.textContent='Admin';el.className='ulvl lva';}
   else{el.textContent='Utilizador';el.className='ulvl lvn';}
-  ['settingsTab','usersTab','backupTab','logsTab','gsTab'].forEach(function(id){document.getElementById(id).style.display=CU.level===0?'':'none';});
+  ['settingsTab','usersTab','backupTab','logsTab'].forEach(function(id){document.getElementById(id).style.display=CU.level===0?'':'none';});
   document.getElementById('fundsTab').style.display=CU.level<=1?'':'none';
   var td=new Date().toISOString().split('T')[0];
   document.getElementById('docDate').value=td;document.getElementById('fDt').value=td;
@@ -875,13 +856,9 @@ async function initApp(){
   document.getElementById('docDate').addEventListener('change',function(){updCot();updCred();});
   document.getElementById('rPer').addEventListener('change',togCR);
   document.getElementById('sLogo').onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){var i=document.getElementById('sLogoI');i.src=ev.target.result;i.style.display='block';};r.readAsDataURL(f);};
-  ['docModal','productsModal','clientsModal'].forEach(function(id){document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});});
-  var gu=getGU();
-  if(gu){
-    document.getElementById('gsUrl').value=gu;
-    setTimeout(gsPing, 800);
-  }
+  ['docModal','productsModal','clientsModal','gsDiagModal'].forEach(function(id){document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});});
   document.getElementById('asPre').textContent=gsScr();
+  setTimeout(gsPing, 800);
   resetFrmBtns();document.getElementById('itemsBody').innerHTML='';addRow();
   aLog('login','Login: '+CU.name);
 }
@@ -891,7 +868,6 @@ function openTab(n){
   var tb=document.querySelector('.tab[onclick="openTab(\''+n+'\')"]');if(tb)tb.classList.add('active');
   var ct=document.getElementById(n);if(ct)ct.classList.add('active');
   if(n==='users')renderUsers();if(n==='logs')loadLogs();
-  if(n==='gsheets')showGsUrlStatus();
   // Abas com dados partilhados: recarrega silenciosamente do Sheets em
   // segundo plano para reflectir o que outras pessoas tenham gravado.
   if(['documents','products','clients','funds','reports'].indexOf(n)>=0 && getGU()){
@@ -927,12 +903,66 @@ function addRow(){
   document.getElementById('itemsBody').appendChild(tr);
 }
 function remR(b){var tb=document.getElementById('itemsBody');if(tb.rows.length>1){b.closest('tr').remove();calcT();}}
+// Verifica se os itens do documento respeitam o stock disponivel.
+// Soma quantidades repetidas do mesmo produto (ex: usuario adicionou a
+// mesma linha duas vezes) e compara com prods[].stock. Em edição de um
+// documento já existente que já tinha deduzido stock, devolve esse stock
+// de volta antes de validar, para não bloquear a propria correcção do doc.
+function validateStock(items){
+  var qtyByName={};
+  items.forEach(function(it){
+    var key=it.description.trim().toLowerCase();
+    qtyByName[key]=(qtyByName[key]||0)+it.quantity;
+  });
+  // Se estamos a editar um documento que ja tinha deduzido stock (Factura
+  // sem credito ja guardada, ou Venda a Dinheiro), devolve esse stock
+  // virtualmente antes de comparar, para nao bloquear a propria edicao.
+  var alreadyDeducted={};
+  if(editId && cDoc && ((cDoc.type==='Factura'&&!cDoc.isCredit)||cDoc.type==='Venda a Dinheiro')){
+    cDoc.items.forEach(function(it){
+      var key=it.description.trim().toLowerCase();
+      alreadyDeducted[key]=(alreadyDeducted[key]||0)+it.quantity;
+    });
+  }
+  var problems=[];
+  Object.keys(qtyByName).forEach(function(key){
+    var p=prods.find(function(x){return x.name.trim().toLowerCase()===key;});
+    if(!p)return; // item de texto livre, sem produto associado no catalogo — nao valida
+    var effectiveStock=(p.stock||0)+(alreadyDeducted[key]||0);
+    if(qtyByName[key]>effectiveStock){
+      problems.push({name:p.name,requested:qtyByName[key],available:effectiveStock});
+    }
+  });
+  return problems;
+}
 function rCalc(tr){
   var q=parseFloat(tr.querySelector('.iq').value)||0,p=parseFloat(tr.querySelector('.ip').value)||0;
   var ds=tr.querySelector('.idc').value.trim(),disc=ds.includes('%')?(q*p)*(parseFloat(ds)||0)/100:(parseFloat(ds)||0);
   var tot=q*p-disc;tr.querySelector('.it2').textContent=fmt(tot);return{q,p,disc,tot};
 }
-function cR(i){rCalc(i.closest('tr'));calcT();}
+function cR(i){var tr=i.closest('tr');rCalc(tr);calcT();checkRowStock(tr);}
+// Mostra um aviso visual discreto na linha do item quando a quantidade
+// digitada excede o stock disponivel do produto correspondente no catalogo.
+function checkRowStock(tr){
+  var descInput=tr.querySelector('.id'),qtyInput=tr.querySelector('.iq');
+  if(!descInput||!qtyInput)return;
+  var name=descInput.value.trim().toLowerCase(),qty=parseFloat(qtyInput.value)||0;
+  var p=prods.find(function(x){return x.name.trim().toLowerCase()===name;});
+  var warnEl=tr.querySelector('.stockWarn');
+  if(!p||qty<=(p.stock||0)){
+    qtyInput.style.borderColor='';
+    if(warnEl)warnEl.remove();
+    return;
+  }
+  qtyInput.style.borderColor='#e74c3c';
+  if(!warnEl){
+    warnEl=document.createElement('div');
+    warnEl.className='stockWarn';
+    warnEl.style.cssText='color:#e74c3c;font-size:10px;margin-top:2px;white-space:nowrap';
+    qtyInput.parentNode.appendChild(warnEl);
+  }
+  warnEl.textContent='Só há '+(p.stock||0)+' em stock';
+}
 function calcT(){
   var rows=document.getElementById('itemsBody').rows,sub=0,td=0;
   for(var i=0;i<rows.length;i++){var r=rCalc(rows[i]);sub+=r.q*r.p;td+=r.disc;}
@@ -955,6 +985,14 @@ function genDoc(){
   var t=getDT(),cn=document.getElementById('cliName').value.trim(),dn=document.getElementById('docNum').value,dd=document.getElementById('docDate').value;
   if(!cn||!dn||!dd){alert('Preencha cliente, numero e data.');return;}
   var items=getItems();if(!items.length){alert('Adicione pelo menos um item valido.');return;}
+  var stockProblems=validateStock(items);
+  if(stockProblems.length){
+    var msg='<b>Stock insuficiente para gerar o documento:</b><br>'+stockProblems.map(function(p){
+      return '• '+esc(p.name)+': pedido '+p.requested+', disponivel '+p.available;
+    }).join('<br>')+'<br>Ajuste as quantidades ou actualize o stock em Produtos.';
+    toast(msg,'err',6000);
+    return;
+  }
   var tot=calcT(),isC=document.getElementById('isCredit').checked;
   cDoc={
     createdAt:editId||new Date().toISOString(),updatedAt:new Date().toISOString(),
@@ -976,7 +1014,15 @@ function genDoc(){
 function saveDoc(){
   if(!cDoc){genDoc();if(!cDoc)return;}
   var idx=docs.findIndex(function(d){return d.createdAt===cDoc.createdAt;});
-  if(idx>=0){docs[idx]=cDoc;}else{docs.push(cDoc);if((cDoc.type==='Factura'&&!cDoc.isCredit)||cDoc.type==='Venda a Dinheiro')dedStock(cDoc);}
+  if(idx>=0){
+    var oldDoc=docs[idx];
+    if(docAffectsStock(oldDoc))retStock(oldDoc);
+    docs[idx]=cDoc;
+    if(docAffectsStock(cDoc))dedStock(cDoc);
+  }else{
+    docs.push(cDoc);
+    if(docAffectsStock(cDoc))dedStock(cDoc);
+  }
   S('documents',docs);loadDocs();fillFDS();
   gsSyncDoc(cDoc);
   aLog('document','Doc '+cDoc.number+' guardado por '+CU.name);alert('Guardado!');clearF();
@@ -1001,7 +1047,7 @@ function renderPrev(d){
   if(d.type==='Recibo'&&d.receiptDetails){document.getElementById('pvRcvB').style.display='';T('pvRF',d.receiptDetails.receivedFrom||'');T('pvRFor',d.receiptDetails.paymentFor||'');T('pvPM',d.receiptDetails.paymentMethod||'');}
   else document.getElementById('pvRcvB').style.display='none';
   var tb=document.getElementById('pvItems');tb.innerHTML='';
-  d.items.forEach(function(it){var tr=document.createElement('tr');tr.innerHTML='<td>'+it.description+'</td><td>'+it.quantity+'</td><td>'+fmt(it.price)+'</td><td>'+fmt(it.discount)+'</td><td>'+fmt(it.total)+'</td>';tb.appendChild(tr);});
+  d.items.forEach(function(it){var tr=document.createElement('tr');tr.innerHTML='<td>'+esc(it.description)+'</td><td>'+it.quantity+'</td><td>'+fmt(it.price)+'</td><td>'+fmt(it.discount)+'</td><td>'+fmt(it.total)+'</td>';tb.appendChild(tr);});
   T('pvSub',fmt(d.subtotal));
   if(d.totalDiscount+d.globalDiscount>0){document.getElementById('pvDiscR').style.display='';T('pvDisc',fmt(d.totalDiscount+d.globalDiscount));}else document.getElementById('pvDiscR').style.display='none';
   if(d.applyIva){document.getElementById('pvIvaR').style.display='';T('pvIva',fmt(d.iva));}else document.getElementById('pvIvaR').style.display='none';
@@ -1025,7 +1071,7 @@ function loadDocs(){
   if(!list.length){el.innerHTML='<p style="color:#999">Nenhum documento.</p>';return;}
   var h='<table class="dt"><thead><tr><th>No</th><th>Tipo</th><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th><th>Acoes</th></tr></thead><tbody>';
   list.forEach(function(d){
-    h+='<tr><td>'+d.number+'</td><td>'+d.type+'</td><td>'+fd(d.date)+'</td><td>'+d.clientName+'</td><td>'+fmt(d.total)+'</td><td>'+sbdg(d.status)+'</td><td>'+
+    h+='<tr><td>'+esc(d.number)+'</td><td>'+esc(d.type)+'</td><td>'+fd(d.date)+'</td><td>'+esc(d.clientName)+'</td><td>'+fmt(d.total)+'</td><td>'+sbdg(d.status)+'</td><td>'+
       '<button class="btn bsm" onclick="viewDoc(\''+d.createdAt+'\')"><i class="fas fa-eye"></i></button> '+
       '<button class="btn bw bsm" onclick="editDoc(\''+d.createdAt+'\')"><i class="fas fa-edit"></i></button> '+
       (CU.level<2?'<button class="btn bd bsm" onclick="delDoc(\''+d.createdAt+'\')"><i class="fas fa-trash"></i></button>':'')+
@@ -1041,18 +1087,18 @@ function viewDoc(id){
   document.getElementById('dmB').innerHTML=buildDH(d);openModal('docModal');
 }
 function buildDH(d){
-  var lh=cfg.companyLogo?'<img src="'+cfg.companyLogo+'" style="max-width:80px;max-height:45px;margin-bottom:4px"><br>':'';
-  var rows='';d.items.forEach(function(it){rows+='<tr><td>'+it.description+'</td><td>'+it.quantity+'</td><td>'+fmt(it.price)+'</td><td>'+fmt(it.discount)+'</td><td>'+fmt(it.total)+'</td></tr>';});
-  return '<div class="dp" style="border:none;padding:0"><div class="dph"><div class="dpc">'+lh+'<h3>'+(cfg.companyName||'')+'</h3><p>'+(cfg.companyAddress||'')+'</p><p>NUIT:'+(cfg.companyNuit||'')+'</p><p>'+(cfg.companyPhone||'')+' | '+(cfg.companyEmail||'')+'</p></div>'+
-    '<div class="dpi"><h3>'+d.type+'</h3><p><b>No:</b>'+d.number+'</p><p><b>Data:</b>'+fd(d.date)+'</p>'+(d.isCredit&&d.creditDetails?'<p><b>Venc:</b>'+fd(d.creditDetails.dueDate)+'</p>':'')+'<p>'+sbdg(d.status)+'</p></div></div>'+
-    '<div class="dpcli"><b>'+d.clientName+'</b> | NUIT:'+(d.clientNuit||'-')+' | Tel:'+(d.clientPhone||'-')+' | '+(d.clientEmail||'-')+'</div>'+
+  var lh=cfg.companyLogo?'<img src="'+esc(cfg.companyLogo)+'" style="max-width:80px;max-height:45px;margin-bottom:4px"><br>':'';
+  var rows='';d.items.forEach(function(it){rows+='<tr><td>'+esc(it.description)+'</td><td>'+it.quantity+'</td><td>'+fmt(it.price)+'</td><td>'+fmt(it.discount)+'</td><td>'+fmt(it.total)+'</td></tr>';});
+  return '<div class="dp" style="border:none;padding:0"><div class="dph"><div class="dpc">'+lh+'<h3>'+esc(cfg.companyName||'')+'</h3><p>'+esc(cfg.companyAddress||'')+'</p><p>NUIT:'+esc(cfg.companyNuit||'')+'</p><p>'+esc(cfg.companyPhone||'')+' | '+esc(cfg.companyEmail||'')+'</p></div>'+
+    '<div class="dpi"><h3>'+esc(d.type)+'</h3><p><b>No:</b>'+esc(d.number)+'</p><p><b>Data:</b>'+fd(d.date)+'</p>'+(d.isCredit&&d.creditDetails?'<p><b>Venc:</b>'+fd(d.creditDetails.dueDate)+'</p>':'')+'<p>'+sbdg(d.status)+'</p></div></div>'+
+    '<div class="dpcli"><b>'+esc(d.clientName)+'</b> | NUIT:'+esc(d.clientNuit||'-')+' | Tel:'+esc(d.clientPhone||'-')+' | '+esc(d.clientEmail||'-')+'</div>'+
     '<table class="it" style="margin-top:11px"><thead><tr><th>Descricao</th><th>Qtd</th><th>Preco</th><th>Desc</th><th>Total</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div class="dptot"><table><tr><td>Subtotal:</td><td>'+fmt(d.subtotal)+'</td></tr>'+
     ((d.totalDiscount+d.globalDiscount)>0?'<tr><td>Desconto:</td><td>'+fmt(d.totalDiscount+d.globalDiscount)+'</td></tr>':'')+
     (d.applyIva?'<tr><td>IVA 16%:</td><td>'+fmt(d.iva)+'</td></tr>':'')+
     '<tr><td><b>Total:</b></td><td><b>'+fmt(d.total)+'</b></td></tr></table></div>'+
-    '<p style="font-style:italic;font-size:11px;margin-top:7px">'+nw(d.total)+'</p>'+(d.notes?'<p style="font-size:12px"><b>Obs:</b>'+d.notes+'</p>':'')+
-    '<div class="dpft">Gerado por: '+d.createdByName+' | '+fdt(d.createdAt)+'</div></div>';
+    '<p style="font-style:italic;font-size:11px;margin-top:7px">'+nw(d.total)+'</p>'+(d.notes?'<p style="font-size:12px"><b>Obs:</b>'+esc(d.notes)+'</p>':'')+
+    '<div class="dpft">Gerado por: '+esc(d.createdByName)+' | '+fdt(d.createdAt)+'</div></div>';
 }
 function editDoc(id){
   var d=docs.find(function(x){return x.createdAt===id;});if(!d)return;
@@ -1076,8 +1122,17 @@ function editDoc(id){
   document.getElementById('frmBtns').innerHTML='<button class="btn bs" onclick="genDoc()"><i class="fas fa-file-alt"></i> Pre-visualizar</button><button class="btn bw" onclick="updDoc()"><i class="fas fa-sync-alt"></i> Actualizar</button><button class="btn" onclick="clearF()"><i class="fas fa-times"></i> Cancelar</button><button class="btn bd" onclick="expPDF()"><i class="fas fa-file-pdf"></i> PDF</button>';
   openTab('create');
 }
-function updDoc(){genDoc();if(!cDoc)return;var idx=docs.findIndex(function(d){return d.createdAt===cDoc.createdAt;});if(idx>=0)docs[idx]=cDoc;S('documents',docs);loadDocs();gsSyncDoc(cDoc);aLog('document','Doc '+cDoc.number+' actualizado por '+CU.name);alert('Actualizado!');clearF();}
-function delDoc(id){var d=docs.find(function(x){return x.createdAt===id;});if(!d)return;if(!confirm('Apagar '+d.type+' '+d.number+'?'))return;docs=docs.filter(function(x){return x.createdAt!==id;});S('documents',docs);loadDocs();gsDelDoc(id);aLog('document',d.number+' apagado por '+CU.name);alert('Apagado.');}
+function updDoc(){
+  genDoc();if(!cDoc)return;
+  saveDoc(); // saveDoc ja trata correctamente reconciliacao de stock quando o doc ja existe (idx>=0)
+}
+function delDoc(id){
+  var d=docs.find(function(x){return x.createdAt===id;});if(!d)return;
+  if(!confirm('Apagar '+d.type+' '+d.number+'?'))return;
+  if(docAffectsStock(d))retStock(d);
+  docs=docs.filter(function(x){return x.createdAt!==id;});
+  S('documents',docs);loadDocs();gsDelDoc(id);aLog('document',d.number+' apagado por '+CU.name);alert('Apagado.');
+}
 function mEdit(){var id=document.getElementById('docModal').dataset.docId;closeModal('docModal');editDoc(id);}
 function mPDF(){var id=document.getElementById('docModal').dataset.docId;var d=docs.find(function(x){return x.createdAt===id;});if(d)bPDF(d,d.type+'_'+d.number+'.pdf');}
 function mReceipt(){var id=document.getElementById('docModal').dataset.docId;closeModal('docModal');mkRcv(id);}
@@ -1100,7 +1155,31 @@ function chSt(ns){
   }
   S('documents',docs);viewDoc(id);loadDocs();gsSyncDoc(docs[idx]);aLog('document','Status '+docs[idx].number+': '+old+'->'+ns+' por '+CU.name);alert('Status actualizado!');
 }
-function dedStock(d){d.items.forEach(function(it){var p=prods.find(function(x){return x.name===it.description;});if(p&&p.stock!==undefined)p.stock=Math.max(0,(p.stock||0)-it.quantity);});S('products',prods);renderProds();}
+function dedStock(d){
+  d.items.forEach(function(it){
+    var key=it.description.trim().toLowerCase();
+    var p=prods.find(function(x){return x.name.trim().toLowerCase()===key;});
+    if(p&&p.stock!==undefined)p.stock=Math.max(0,(p.stock||0)-it.quantity);
+  });
+  S('products',prods);renderProds();gsSyncAllProductStock(d);
+}
+// Devolve ao catalogo o stock que tinha sido deduzido por um documento
+// (usado ao apagar ou ao editar/actualizar um documento que ja tinha
+// afectado o stock — caso contrario o stock fica permanentemente errado).
+function retStock(d){
+  d.items.forEach(function(it){
+    var key=it.description.trim().toLowerCase();
+    var p=prods.find(function(x){return x.name.trim().toLowerCase()===key;});
+    if(p&&p.stock!==undefined)p.stock=(p.stock||0)+it.quantity;
+  });
+  S('products',prods);renderProds();gsSyncAllProductStock(d);
+}
+function gsSyncAllProductStock(d){
+  if(!getGU())return;
+  var keys={};d.items.forEach(function(it){keys[it.description.trim().toLowerCase()]=true;});
+  prods.filter(function(p){return keys[p.name.trim().toLowerCase()];}).forEach(function(p){gsSyncProd(p);});
+}
+function docAffectsStock(d){return (d.type==='Factura'&&!d.isCredit)||d.type==='Venda a Dinheiro';}
 function expPDF(){if(!cDoc){alert('Gere o documento primeiro.');return;}bPDF(cDoc,cDoc.type+'_'+cDoc.number+'.pdf');}
 function genCopies(){if(!cDoc){alert('Gere o documento primeiro.');return;}expPDF();bPDF(cDoc,'COPIA_'+cDoc.type+'_'+cDoc.number+'.pdf','COPIA DE ARQUIVO');}
 function bPDF(d,fn,wm){
@@ -1158,7 +1237,7 @@ function renderProds(){
   var h='<table class="dt"><thead><tr><th>Cod</th><th>Nome</th><th>Preco</th><th>Stock</th><th>Cat</th>'+(CU.level<2?'<th>Acoes</th>':'')+'</tr></thead><tbody>';
   prods.forEach(function(p){
     var cls=(p.stock||0)<=0?' class="sem"':(p.minStock>0&&(p.stock||0)<=p.minStock?' class="low"':'');
-    h+='<tr'+cls+'><td>'+(p.code||'-')+'</td><td>'+p.name+'</td><td>'+fmt(p.price)+'</td><td>'+(p.stock||0)+'</td><td>'+(p.category||'-')+'</td>'+(CU.level<2?'<td><button class="btn bsm" onclick="editProd(\''+p.id+'\')"><i class="fas fa-edit"></i></button> <button class="btn bd bsm" onclick="delProd(\''+p.id+'\')"><i class="fas fa-trash"></i></button></td>':'')+'</tr>';
+    h+='<tr'+cls+'><td>'+esc(p.code||'-')+'</td><td>'+esc(p.name)+'</td><td>'+fmt(p.price)+'</td><td>'+(p.stock||0)+'</td><td>'+esc(p.category||'-')+'</td>'+(CU.level<2?'<td><button class="btn bsm" onclick="editProd(\''+p.id+'\')"><i class="fas fa-edit"></i></button> <button class="btn bd bsm" onclick="delProd(\''+p.id+'\')"><i class="fas fa-trash"></i></button></td>':'')+'</tr>';
   });
   h+='</tbody></table>';el.innerHTML=h;
 }
@@ -1182,7 +1261,7 @@ function renderClis(){
   clis=G('clients')||[];var el=document.getElementById('clientList');
   if(!clis.length){el.innerHTML='<p style="color:#999">Nenhum cliente.</p>';return;}
   var h='<table class="dt"><thead><tr><th>Nome</th><th>NUIT</th><th>Tel</th><th>Email</th>'+(CU.level<2?'<th>Acoes</th>':'')+'</tr></thead><tbody>';
-  clis.forEach(function(c){h+='<tr><td>'+c.name+'</td><td>'+(c.nuit||'-')+'</td><td>'+(c.phone||'-')+'</td><td>'+(c.email||'-')+'</td>'+(CU.level<2?'<td><button class="btn bsm" onclick="editCli(\''+c.id+'\')"><i class="fas fa-edit"></i></button> <button class="btn bd bsm" onclick="delCli(\''+c.id+'\')"><i class="fas fa-trash"></i></button></td>':'')+'</tr>';});
+  clis.forEach(function(c){h+='<tr><td>'+esc(c.name)+'</td><td>'+esc(c.nuit||'-')+'</td><td>'+esc(c.phone||'-')+'</td><td>'+esc(c.email||'-')+'</td>'+(CU.level<2?'<td><button class="btn bsm" onclick="editCli(\''+c.id+'\')"><i class="fas fa-edit"></i></button> <button class="btn bd bsm" onclick="delCli(\''+c.id+'\')"><i class="fas fa-trash"></i></button></td>':'')+'</tr>';});
   h+='</tbody></table>';el.innerHTML=h;
 }
 function saveCliQ(){
@@ -1208,11 +1287,11 @@ function renderFunds(){
   var sr=[].concat(funds).sort(function(a,b){return new Date(b.date)-new Date(a.date);});
   var h='<div class="sc" style="margin-bottom:11px"><b>Saldo: '+fmt(bal)+'</b></div>';
   h+='<table class="dt"><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Fonte</th><th>Desc</th><th></th></tr></thead><tbody>';
-  sr.forEach(function(f){var b=f.type==='income'?'<span class="bdg ba">Entrada</span>':'<span class="bdg br">Saida</span>';h+='<tr><td>'+fd(f.date)+'</td><td>'+b+'</td><td>'+fmt(f.amount)+'</td><td>'+f.source+'</td><td>'+(f.description||'-')+'</td><td><button class="btn bd bsm" onclick="delFund(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';});
+  sr.forEach(function(f){var b=f.type==='income'?'<span class="bdg ba">Entrada</span>':'<span class="bdg br">Saida</span>';h+='<tr><td>'+fd(f.date)+'</td><td>'+b+'</td><td>'+fmt(f.amount)+'</td><td>'+esc(f.source)+'</td><td>'+esc(f.description||'-')+'</td><td><button class="btn bd bsm" onclick="delFund(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';});
   h+='</tbody></table>';el.innerHTML=h;
 }
 function delFund(id){if(!confirm('Apagar registo?'))return;funds=funds.filter(function(f){return f.id!==id;});S('funds',funds);renderFunds();gsDelFund(id);aLog('funds','Fundo apagado por '+CU.name);}
-function fillFDS(){var s=document.getElementById('fDocR');if(!s)return;s.innerHTML='<option value="">Nenhum</option>';docs.forEach(function(d){s.innerHTML+='<option value="'+d.createdAt+'">'+d.type+' '+d.number+' - '+d.clientName+'</option>';});}
+function fillFDS(){var s=document.getElementById('fDocR');if(!s)return;s.innerHTML='<option value="">Nenhum</option>';docs.forEach(function(d){s.innerHTML+='<option value="'+d.createdAt+'">'+esc(d.type+' '+d.number+' - '+d.clientName)+'</option>';});}
 function loadCfg(){cfg=G('companySettings')||{};if(cfg.companyName)document.getElementById('sName').value=cfg.companyName;if(cfg.companyAddress)document.getElementById('sAddr').value=cfg.companyAddress;if(cfg.companyNuit)document.getElementById('sNuit').value=cfg.companyNuit;if(cfg.companyPhone)document.getElementById('sPhone').value=cfg.companyPhone;if(cfg.companyEmail)document.getElementById('sEmail').value=cfg.companyEmail;if(cfg.companyLogo){var img=document.getElementById('sLogoI');img.src=cfg.companyLogo;img.style.display='block';}}
 function saveSett(){
   cfg={companyName:document.getElementById('sName').value.trim(),companyAddress:document.getElementById('sAddr').value.trim(),companyNuit:document.getElementById('sNuit').value.trim(),companyPhone:document.getElementById('sPhone').value.trim(),companyEmail:document.getElementById('sEmail').value.trim(),companyLogo:cfg.companyLogo||null};
@@ -1234,7 +1313,7 @@ function renderUsers(){
   var el=document.getElementById('userList');if(!el)return;
   var lvs=['Master','Admin','Utilizador'];
   var h='<table class="dt"><thead><tr><th>Nome</th><th>Username</th><th>Nivel</th><th>Criado</th><th></th></tr></thead><tbody>';
-  users.forEach(function(u){h+='<tr><td>'+u.name+'</td><td>'+u.username+'</td><td>'+(lvs[u.level]||'')+'</td><td>'+fd((u.createdAt||'').split('T')[0])+'</td><td>'+(u.id!==CU.id?'<button class="btn bd bsm" onclick="delUser(\''+u.id+'\')"><i class="fas fa-trash"></i></button>':'--')+'</td></tr>';});
+  users.forEach(function(u){h+='<tr><td>'+esc(u.name)+'</td><td>'+esc(u.username)+'</td><td>'+(lvs[u.level]||'')+'</td><td>'+fd((u.createdAt||'').split('T')[0])+'</td><td>'+(u.id!==CU.id?'<button class="btn bd bsm" onclick="delUser(\''+u.id+'\')"><i class="fas fa-trash"></i></button>':'--')+'</td></tr>';});
   h+='</tbody></table>';el.innerHTML=h;
 }
 function doBackup(){var data={users,documents:docs,products:prods,clients:clis,funds,logs,companySettings:cfg,exportedAt:new Date().toISOString()};var b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='backup_bsk_'+new Date().toISOString().split('T')[0]+'.json';a.click();aLog('backup','Backup criado por '+CU.name);}
@@ -1249,10 +1328,10 @@ function loadLogs(){
   var sr=(document.getElementById('srchL')||{value:''}).value.toLowerCase();
   var ft=(document.getElementById('fLT')||{value:''}).value,fu=(document.getElementById('fLU')||{value:''}).value;
   var ulf=document.getElementById('fLU');
-  if(ulf){var cv=ulf.value;var un=[...new Set(logs.map(function(l){return l.user;}))].filter(Boolean);ulf.innerHTML='<option value="">Todos</option>';un.forEach(function(u){ulf.innerHTML+='<option value="'+u+'">'+u+'</option>';});ulf.value=cv;}
+  if(ulf){var cv=ulf.value;var un=[...new Set(logs.map(function(l){return l.user;}))].filter(Boolean);ulf.innerHTML='<option value="">Todos</option>';un.forEach(function(u){ulf.innerHTML+='<option value="'+esc(u)+'">'+esc(u)+'</option>';});ulf.value=cv;}
   var list=logs.filter(function(l){if(sr&&!(l.message||'').toLowerCase().includes(sr))return false;if(ft&&l.type!==ft)return false;if(fu&&l.user!==fu)return false;return true;});
   var h='<table class="dt"><thead><tr><th>Data/Hora</th><th>Tipo</th><th>Utilizador</th><th>Mensagem</th></tr></thead><tbody>';
-  list.slice(0,200).forEach(function(l){h+='<tr><td>'+fdt(l.createdAt)+'</td><td>'+l.type+'</td><td>'+(l.user||'-')+'</td><td>'+l.message+'</td></tr>';});
+  list.slice(0,200).forEach(function(l){h+='<tr><td>'+fdt(l.createdAt)+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.user||'-')+'</td><td>'+esc(l.message)+'</td></tr>';});
   h+='</tbody></table>';document.getElementById('logsList').innerHTML=list.length?h:'<p style="color:#999">Sem registos.</p>';
 }
 function getRange(){
@@ -1269,14 +1348,14 @@ function genRep(){
   var t=document.getElementById('rType').value,rng=getRange();
   var f=docs.filter(function(d){var dt=new Date(d.date);return dt>=rng.s&&dt<=rng.e;});
   var h='';
-  if(t==='sales'){var tot=f.reduce(function(s,d){return s+d.total;},0),tiv=f.reduce(function(s,d){return s+d.iva;},0);h='<p>Docs: <b>'+f.length+'</b> | Total: <b>'+fmt(tot)+'</b> | IVA: <b>'+fmt(tiv)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Tipo</th><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th></tr></thead><tbody>';f.forEach(function(d){h+='<tr><td>'+d.number+'</td><td>'+d.type+'</td><td>'+fd(d.date)+'</td><td>'+d.clientName+'</td><td>'+fmt(d.total)+'</td><td>'+sbdg(d.status)+'</td></tr>';});h+='</tbody></table>';}
+  if(t==='sales'){var tot=f.reduce(function(s,d){return s+d.total;},0),tiv=f.reduce(function(s,d){return s+d.iva;},0);h='<p>Docs: <b>'+f.length+'</b> | Total: <b>'+fmt(tot)+'</b> | IVA: <b>'+fmt(tiv)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Tipo</th><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th></tr></thead><tbody>';f.forEach(function(d){h+='<tr><td>'+esc(d.number)+'</td><td>'+esc(d.type)+'</td><td>'+fd(d.date)+'</td><td>'+esc(d.clientName)+'</td><td>'+fmt(d.total)+'</td><td>'+sbdg(d.status)+'</td></tr>';});h+='</tbody></table>';}
   else if(t==='prods'){var pm={};f.forEach(function(d){(d.items||[]).forEach(function(it){if(!pm[it.description])pm[it.description]={q:0,v:0};pm[it.description].q+=it.quantity;pm[it.description].v+=it.total;});});var sk=Object.keys(pm).sort(function(a,b){return pm[b].q-pm[a].q;});h='<table class="dt"><thead><tr><th>Produto</th><th>Qtd</th><th>Total</th></tr></thead><tbody>';sk.forEach(function(k){h+='<tr><td>'+k+'</td><td>'+pm[k].q+'</td><td>'+fmt(pm[k].v)+'</td></tr>';});h+='</tbody></table>';}
-  else if(t==='clients'){var cm={};f.forEach(function(d){if(!cm[d.clientName])cm[d.clientName]={c:0,v:0};cm[d.clientName].c++;cm[d.clientName].v+=d.total;});h='<table class="dt"><thead><tr><th>Cliente</th><th>Docs</th><th>Total</th></tr></thead><tbody>';Object.keys(cm).forEach(function(k){h+='<tr><td>'+k+'</td><td>'+cm[k].c+'</td><td>'+fmt(cm[k].v)+'</td></tr>';});h+='</tbody></table>';}
-  else if(t==='tax'){var tb=f.filter(function(d){return d.applyIva;}).reduce(function(s,d){return s+(d.total-d.iva);},0),ti=f.reduce(function(s,d){return s+d.iva;},0);h='<p>Base: <b>'+fmt(tb)+'</b> | IVA: <b>'+fmt(ti)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Data</th><th>Cliente</th><th>Base</th><th>IVA</th></tr></thead><tbody>';f.filter(function(d){return d.applyIva;}).forEach(function(d){h+='<tr><td>'+d.number+'</td><td>'+fd(d.date)+'</td><td>'+d.clientName+'</td><td>'+fmt(d.total-d.iva)+'</td><td>'+fmt(d.iva)+'</td></tr>';});h+='</tbody></table>';}
+  else if(t==='clients'){var cm={};f.forEach(function(d){if(!cm[d.clientName])cm[d.clientName]={c:0,v:0};cm[d.clientName].c++;cm[d.clientName].v+=d.total;});h='<table class="dt"><thead><tr><th>Cliente</th><th>Docs</th><th>Total</th></tr></thead><tbody>';Object.keys(cm).forEach(function(k){h+='<tr><td>'+esc(k)+'</td><td>'+cm[k].c+'</td><td>'+fmt(cm[k].v)+'</td></tr>';});h+='</tbody></table>';}
+  else if(t==='tax'){var tb=f.filter(function(d){return d.applyIva;}).reduce(function(s,d){return s+(d.total-d.iva);},0),ti=f.reduce(function(s,d){return s+d.iva;},0);h='<p>Base: <b>'+fmt(tb)+'</b> | IVA: <b>'+fmt(ti)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Data</th><th>Cliente</th><th>Base</th><th>IVA</th></tr></thead><tbody>';f.filter(function(d){return d.applyIva;}).forEach(function(d){h+='<tr><td>'+esc(d.number)+'</td><td>'+fd(d.date)+'</td><td>'+esc(d.clientName)+'</td><td>'+fmt(d.total-d.iva)+'</td><td>'+fmt(d.iva)+'</td></tr>';});h+='</tbody></table>';}
   else if(t==='stock'){h='<table class="dt"><thead><tr><th>Cod</th><th>Nome</th><th>Stock</th><th>Min</th><th>Estado</th></tr></thead><tbody>';prods.forEach(function(p){var s=(p.stock||0)<=0?'<span class="bdg br">Sem Stock</span>':(p.minStock>0&&(p.stock||0)<=p.minStock?'<span class="bdg bp">Baixo</span>':'<span class="bdg ba">OK</span>');h+='<tr><td>'+(p.code||'-')+'</td><td>'+p.name+'</td><td>'+(p.stock||0)+'</td><td>'+(p.minStock||0)+'</td><td>'+s+'</td></tr>';});h+='</tbody></table>';}
-  else if(t==='credits'){var cr=f.filter(function(d){return d.isCredit&&d.status!=='paid';});h='<table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Total</th><th>Venc</th><th>Status</th></tr></thead><tbody>';cr.forEach(function(d){h+='<tr><td>'+d.number+'</td><td>'+d.clientName+'</td><td>'+fmt(d.total)+'</td><td>'+(d.creditDetails?fd(d.creditDetails.dueDate):'-')+'</td><td>'+sbdg(d.status)+'</td></tr>';});h+='</tbody></table>';}
-  else if(t==='payments'){var pd=f.filter(function(d){return d.status==='paid';}),tp=pd.reduce(function(s,d){return s+d.total;},0);h='<p>Total pago: <b>'+fmt(tp)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Data</th><th>Total</th></tr></thead><tbody>';pd.forEach(function(d){h+='<tr><td>'+d.number+'</td><td>'+d.clientName+'</td><td>'+fd(d.date)+'</td><td>'+fmt(d.total)+'</td></tr>';});h+='</tbody></table>';}
-  else if(t==='discounts'){h='<table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Desc.Item</th><th>Desc.Global</th><th>Total</th></tr></thead><tbody>';f.filter(function(d){return(d.totalDiscount+d.globalDiscount)>0;}).forEach(function(d){h+='<tr><td>'+d.number+'</td><td>'+d.clientName+'</td><td>'+fmt(d.totalDiscount)+'</td><td>'+fmt(d.globalDiscount)+'</td><td>'+fmt(d.totalDiscount+d.globalDiscount)+'</td></tr>';});h+='</tbody></table>';}
+  else if(t==='credits'){var cr=f.filter(function(d){return d.isCredit&&d.status!=='paid';});h='<table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Total</th><th>Venc</th><th>Status</th></tr></thead><tbody>';cr.forEach(function(d){h+='<tr><td>'+esc(d.number)+'</td><td>'+esc(d.clientName)+'</td><td>'+fmt(d.total)+'</td><td>'+(d.creditDetails?fd(d.creditDetails.dueDate):'-')+'</td><td>'+sbdg(d.status)+'</td></tr>';});h+='</tbody></table>';}
+  else if(t==='payments'){var pd=f.filter(function(d){return d.status==='paid';}),tp=pd.reduce(function(s,d){return s+d.total;},0);h='<p>Total pago: <b>'+fmt(tp)+'</b></p><table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Data</th><th>Total</th></tr></thead><tbody>';pd.forEach(function(d){h+='<tr><td>'+esc(d.number)+'</td><td>'+esc(d.clientName)+'</td><td>'+fd(d.date)+'</td><td>'+fmt(d.total)+'</td></tr>';});h+='</tbody></table>';}
+  else if(t==='discounts'){h='<table class="dt"><thead><tr><th>No</th><th>Cliente</th><th>Desc.Item</th><th>Desc.Global</th><th>Total</th></tr></thead><tbody>';f.filter(function(d){return(d.totalDiscount+d.globalDiscount)>0;}).forEach(function(d){h+='<tr><td>'+esc(d.number)+'</td><td>'+esc(d.clientName)+'</td><td>'+fmt(d.totalDiscount)+'</td><td>'+fmt(d.globalDiscount)+'</td><td>'+fmt(d.totalDiscount+d.globalDiscount)+'</td></tr>';});h+='</tbody></table>';}
   document.getElementById('repOut').innerHTML=h||'<p style="color:#999">Sem dados para o periodo.</p>';
 }
 function expRepPDF(){
@@ -1301,7 +1380,7 @@ function acP(inp){
     div.textContent=p.name+(p.code?' ['+p.code+']':'')+' - '+fmt(p.price)+si;
     if((p.stock||0)<=0)div.style.color='#e74c3c';
     div.onclick=function(){
-      if((p.stock||0)<=0&&CU.level>1){alert('Sem stock.');return;}
+      if((p.stock||0)<=0){toast('<i class="fas fa-ban"></i> "'+esc(p.name)+'" sem stock disponivel.','err');return;}
       var tr=inp.closest('tr');inp.value=p.name;tr.querySelector('.ip').value=p.price;tr.querySelector('.iq').value=1;tr.querySelector('.idc').value='0';
       cR(inp);list.innerHTML='';list.style.display='none';
     };list.appendChild(div);
@@ -1323,14 +1402,63 @@ function openProductsModal(){
   document.getElementById('mpS').value='';fMP();openModal('productsModal');
   if(getGU())gsReadSheet('Produtos').then(function(rows){prods=rows.map(rowsToProductObj);S('products',prods);fMP();}).catch(function(){});
 }
-function fMP(){var t=(document.getElementById('mpS').value||'').toLowerCase(),tb=document.getElementById('mpB');tb.innerHTML='';var l=t?prods.filter(function(p){return p.name.toLowerCase().includes(t)||(p.code&&p.code.toLowerCase().includes(t));}):prods;l.forEach(function(p){var tr=document.createElement('tr');tr.innerHTML='<td>'+(p.code||'-')+'</td><td>'+p.name+'</td><td>'+fmt(p.price)+'</td><td>'+(p.stock||0)+'</td><td><button class="btn bsm" onclick="addPF(\''+p.id+'\')"><i class="fas fa-plus"></i></button></td>';tb.appendChild(tr);});}
-function addPF(id){var p=prods.find(function(x){return x.id===id;});if(!p)return;if((p.stock||0)<=0&&CU.level>1){alert('Sem stock.');return;}var tr=document.createElement('tr');tr.innerHTML='<td><div class="acp"><input type="text" class="id" value="'+esc(p.name)+'" oninput="acP(this)"><div class="acl"></div></div></td><td><input type="number" class="iq" value="1" min="1" oninput="cR(this)"></td><td><input type="number" class="ip" value="'+p.price+'" min="0" step="0.01" oninput="cR(this)"></td><td><input type="text" class="idc" value="0" oninput="cR(this)"></td><td class="it2">'+fmt(p.price)+'</td><td><button class="btn bd bsm" onclick="remR(this)"><i class="fas fa-times"></i></button></td>';document.getElementById('itemsBody').appendChild(tr);calcT();closeModal('productsModal');}
+function fMP(){
+  var t=(document.getElementById('mpS').value||'').toLowerCase(),tb=document.getElementById('mpB');
+  tb.innerHTML='';
+  var l=t?prods.filter(function(p){return p.name.toLowerCase().includes(t)||(p.code&&p.code.toLowerCase().includes(t));}):prods;
+  if(!l.length){tb.innerHTML='<tr class="row-disabled"><td colspan="5" style="text-align:center;color:#999;padding:18px">Nenhum produto encontrado.</td></tr>';return;}
+  l.forEach(function(p){
+    var stock=p.stock||0,noStock=stock<=0;
+    var tr=document.createElement('tr');
+    tr.dataset.id=p.id;
+    if(noStock)tr.classList.add('row-disabled');
+    tr.innerHTML='<td>'+esc(p.code||'-')+'</td><td>'+esc(p.name)+'</td><td>'+fmt(p.price)+'</td><td>'+
+      (noStock?'<span style="color:#e74c3c;font-weight:600">Sem stock</span>':stock)+
+      '</td><td><button type="button" class="btn bsm pick-prod-btn"'+(noStock?' disabled title="Sem stock disponivel"':'')+'><i class="fas fa-plus"></i></button></td>';
+    tb.appendChild(tr);
+  });
+}
+// Delegação de clique: funciona mesmo que as linhas sejam recriadas a cada
+// pesquisa/recarregamento, e elimina dependencia de onclick com texto
+// interpolado (que quebrava com nomes contendo & < > ").
+document.addEventListener('DOMContentLoaded',function(){
+  var mpB=document.getElementById('mpB');
+  if(mpB)mpB.addEventListener('click',function(e){
+    var tr=e.target.closest('tr');
+    if(!tr||!tr.dataset.id||tr.classList.contains('row-disabled'))return;
+    addPF(tr.dataset.id);
+  });
+  var mcB=document.getElementById('mcB');
+  if(mcB)mcB.addEventListener('click',function(e){
+    var tr=e.target.closest('tr');
+    if(!tr||!tr.dataset.id)return;
+    selC(tr.dataset.id);
+  });
+});
+function addPF(id){
+  var p=prods.find(function(x){return x.id===id;});if(!p)return;
+  if((p.stock||0)<=0){toast('<i class="fas fa-ban"></i> "'+esc(p.name)+'" sem stock disponivel.','err');return;}
+  var tr=document.createElement('tr');
+  tr.innerHTML='<td><div class="acp"><input type="text" class="id" value="'+esc(p.name)+'" oninput="acP(this)"><div class="acl"></div></div></td><td><input type="number" class="iq" value="1" min="1" oninput="cR(this)"></td><td><input type="number" class="ip" value="'+p.price+'" min="0" step="0.01" oninput="cR(this)"></td><td><input type="text" class="idc" value="0" oninput="cR(this)"></td><td class="it2">'+fmt(p.price)+'</td><td><button class="btn bd bsm" onclick="remR(this)"><i class="fas fa-times"></i></button></td>';
+  document.getElementById('itemsBody').appendChild(tr);calcT();closeModal('productsModal');
+}
+function fMC(){
+  var t=(document.getElementById('mcS').value||'').toLowerCase(),tb=document.getElementById('mcB');
+  tb.innerHTML='';
+  var l=t?clis.filter(function(c){return c.name.toLowerCase().includes(t)||(c.nuit&&c.nuit.includes(t));}):clis;
+  if(!l.length){tb.innerHTML='<tr class="row-disabled"><td colspan="5" style="text-align:center;color:#999;padding:18px">Nenhum cliente encontrado.</td></tr>';return;}
+  l.forEach(function(c){
+    var tr=document.createElement('tr');
+    tr.dataset.id=c.id;
+    tr.innerHTML='<td>'+esc(c.name)+'</td><td>'+esc(c.nuit||'-')+'</td><td>'+esc(c.phone||'-')+'</td><td>'+esc(c.email||'-')+'</td><td><button type="button" class="btn bsm pick-cli-btn"><i class="fas fa-check"></i></button></td>';
+    tb.appendChild(tr);
+  });
+}
+function selC(id){var c=clis.find(function(x){return x.id===id;});if(c){fillC(c);closeModal('clientsModal');}}
 function openClientsModal(){
   document.getElementById('mcS').value='';fMC();openModal('clientsModal');
   if(getGU())gsReadSheet('Clientes').then(function(rows){clis=rows.map(rowsToClientObj);S('clients',clis);fMC();}).catch(function(){});
 }
-function fMC(){var t=(document.getElementById('mcS').value||'').toLowerCase(),tb=document.getElementById('mcB');tb.innerHTML='';var l=t?clis.filter(function(c){return c.name.toLowerCase().includes(t)||(c.nuit&&c.nuit.includes(t));}):clis;l.forEach(function(c){var tr=document.createElement('tr');tr.innerHTML='<td>'+c.name+'</td><td>'+(c.nuit||'-')+'</td><td>'+(c.phone||'-')+'</td><td>'+(c.email||'-')+'</td><td><button class="btn bsm" onclick="selC(\''+c.id+'\')"><i class="fas fa-check"></i></button></td>';tb.appendChild(tr);});}
-function selC(id){var c=clis.find(function(x){return x.id===id;});if(c){fillC(c);closeModal('clientsModal');}}
 function fillYF(){var s=document.getElementById('fDY');if(!s)return;var ys=[...new Set(docs.map(function(d){return(d.date||'').split('-')[0];}).filter(Boolean))];var cy=new Date().getFullYear().toString();if(!ys.includes(cy))ys.push(cy);ys.sort().reverse();var ov=s.value;s.innerHTML='<option value="">Todos os Anos</option>';ys.forEach(function(y){s.innerHTML+='<option value="'+y+'">'+y+'</option>';});s.value=ov;}
 function fmt(v){return(parseFloat(v)||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' MT';}
 function fd(s){if(!s)return'-';try{var d=new Date(s+'T12:00:00');return d.toLocaleDateString('pt-MZ');}catch(e){return s;}}
@@ -1349,8 +1477,9 @@ function nw(v){
   res+=' meticais';if(dc>0)res+=' e '+(dc===1?'um centavo':a(dc)+' centavos');return res.trim();
 }
 // ── TOAST NOTIFICATION SYSTEM ──
-function toast(msg, type){
+function toast(msg, type, duration){
   type = type||'ok';
+  duration = duration||3200;
   var c=document.getElementById('toastContainer');
   var el=document.createElement('div');
   el.className='toast t-'+type;
@@ -1360,7 +1489,7 @@ function toast(msg, type){
   setTimeout(function(){
     el.style.animation='toastOut .3s ease forwards';
     setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},300);
-  },3200);
+  },duration);
 }
 
 // ── STATS FOR DOCS TAB ──
@@ -1387,38 +1516,20 @@ window.alert=function(msg){
   } else { _origAlert(msg); }
 };
 // ================================================================
-function saveGsUrl(){
-  var u=document.getElementById('gsUrl').value.trim();
-  if(!u){alert('Insira a URL da Web App.');return;}
-  localStorage.setItem('gsheetsUrl',u);
-  // Mostrar instrucao para colocar no codigo
-  var msg='<i class="fas fa-check-circle" style="color:#28a745"></i> URL guardada neste navegador!<br>';
-  msg+='<small style="color:#555;margin-top:4px;display:block"><b>Dica:</b> Para funcionar em qualquer browser/PC, edite o ficheiro HTML e cole a URL na variavel <code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">GS_URL</code> no topo do script.</small>';
-  gsSS(msg,'ok');
-  gsL('URL guardada. A testar conexao...');
-  gsPing().then(function(){ refreshAllData(); });
-}
-
 function showGsUrlStatus(){
   var el=document.getElementById('gsUrlStatus');if(!el)return;
   var url=getGU();
-  if(GS_URL && GS_URL.trim()!==''){
+  if(url){
     el.innerHTML='<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:7px;padding:11px 14px;font-size:13px;display:flex;align-items:center;gap:10px">'+
       '<i class="fas fa-lock" style="color:#155724;font-size:16px"></i>'+
-      '<div><b style="color:#155724">URL configurada directamente no codigo HTML</b><br>'+
-      '<span style="color:#555;font-size:12px">Funciona em qualquer browser ou computador automaticamente. Nao precisa de configurar nada.</span></div></div>';
-  } else if(url) {
-    el.innerHTML='<div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:7px;padding:11px 14px;font-size:13px">'+
-      '<i class="fas fa-exclamation-triangle" style="color:#856404"></i> <b>URL guardada so neste browser</b> — '+
-      'Se abrir noutro browser ou PC, tera de configurar de novo.<br>'+
-      '<span style="color:#555;font-size:12px;margin-top:4px;display:block">'+
-      '<b>Solucao permanente:</b> Edite o ficheiro HTML, encontre a linha <code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">var GS_URL = \'\';</code> '+
-      'e coloque a URL entre as aspas: <code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">var GS_URL = \''+url+'\';</code></span></div>';
+      '<div><b style="color:#155724">Ligacao automatica configurada</b><br>'+
+      '<span style="color:#555;font-size:12px">A base de dados partilhada (Google Sheets) liga-se automaticamente — nao precisa de configurar nada.</span></div></div>';
   } else {
     el.innerHTML='<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:7px;padding:11px 14px;font-size:13px">'+
-      '<i class="fas fa-times-circle" style="color:#721c24"></i> <b>Sem URL configurada</b> — '+
-      'Cole a URL da Web App abaixo e clique Guardar.</div>';
+      '<i class="fas fa-times-circle" style="color:#721c24"></i> <b>Sem ligacao configurada</b> — '+
+      'Os dados ficam apenas neste navegador ate que a variavel <code>GS_URL</code> seja definida no ficheiro HTML.</div>';
   }
+  gsPing();
 }
 function gsSS(msg,t){
   var el=document.getElementById('gsSt');if(!el)return;
@@ -1445,15 +1556,29 @@ function gsShowSyncing(show){
 
 // ---- Ping / teste de conexao ----
 async function gsPing(){
-  var url=getGU();if(!url)return;
+  var url=getGU();
+  setGsIndicator('checking');
+  if(!url){ setGsIndicator('err','Sem URL configurada.'); return; }
   try{
     var res=await fetch(url+'?action=ping',{mode:'cors'});
     var json=await res.json();
     if(json.status==='ok'){
       gsSS('<i class="fas fa-check-circle" style="color:#28a745"></i> Conectado ao Google Sheets! '+JSON.stringify(json.stats||{}),'ok');
       gsL('PING OK: '+json.message);
-    }else{gsSS('<i class="fas fa-exclamation-triangle"></i> Erro: '+json.message,'e');gsL('PING ERRO: '+json.message);}
-  }catch(ex){gsSS('<i class="fas fa-exclamation-triangle"></i> Falha na conexao. Verifique a URL.','e');gsL('PING FALHA: '+ex.message);}
+      setGsIndicator('ok','Ligado ao Google Sheets.');
+    }else{
+      gsSS('<i class="fas fa-exclamation-triangle"></i> Erro: '+json.message,'e');gsL('PING ERRO: '+json.message);
+      setGsIndicator('err','Erro: '+json.message);
+    }
+  }catch(ex){
+    gsSS('<i class="fas fa-exclamation-triangle"></i> Falha na conexao. Verifique a URL.','e');gsL('PING FALHA: '+ex.message);
+    setGsIndicator('err','Falha de ligacao: '+ex.message);
+  }
+}
+function setGsIndicator(state,tooltip){
+  var el=document.getElementById('gsIndicator');if(!el)return;
+  el.className='gsi gsi-'+state;
+  if(tooltip)el.title='Google Sheets: '+tooltip+' (clique para detalhes)';
 }
 
 // ---- Conversor de dados para linhas do Sheets ----
@@ -1603,7 +1728,7 @@ async function gsExp(t){
     await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'write',sheet:cfg2.sh,rows:rows})});
     gsSS('<i class="fas fa-check-circle" style="color:#28a745"></i> '+cfg2.data.length+' registos exportados para "'+cfg2.sh+'"!','ok');
     gsL('OK: Exportados '+cfg2.data.length+' para '+cfg2.sh+'.');
-    document.getElementById('gsp-'+t).innerHTML='<span style="color:#155724;font-size:11px"><i class="fas fa-check"></i> '+cfg2.data.length+' exportados</span>';
+    var gel=document.getElementById('gsp-'+t);if(gel)gel.innerHTML='<span style="color:#155724;font-size:11px"><i class="fas fa-check"></i> '+cfg2.data.length+' exportados</span>';
     aLog('backup',cfg2.sh+' exportado por '+CU.name);
   }catch(ex){gsSS('<i class="fas fa-times-circle"></i> Erro: '+ex.message,'e');gsL('ERRO: '+ex.message);}
 }
@@ -1630,7 +1755,7 @@ async function gsImp(t){
     renderEverything();
     gsSS('<i class="fas fa-check-circle" style="color:#28a745"></i> '+rows.length+' registos importados de "'+sh+'"!','ok');
     gsL('IMPORT OK: '+rows.length+' linhas de '+sh+'.');
-    document.getElementById('gsp-'+t).innerHTML='<span style="color:#155724;font-size:11px"><i class="fas fa-check"></i> '+rows.length+' importados</span>';
+    var gel2=document.getElementById('gsp-'+t);if(gel2)gel2.innerHTML='<span style="color:#155724;font-size:11px"><i class="fas fa-check"></i> '+rows.length+' importados</span>';
     aLog('backup',sh+' importado por '+CU.name);
   }catch(ex){gsSS('<i class="fas fa-times-circle"></i> Erro: '+ex.message,'e');gsL('IMPORT ERRO: '+ex.message);}
 }
